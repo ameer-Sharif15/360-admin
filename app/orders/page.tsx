@@ -160,7 +160,7 @@ export default function OrdersPage() {
                     Check-in: {new Date(order.checkInDate).toLocaleDateString()}
                   </div>
                   <div style={{ color: '#999', fontSize: 12 }}>
-                    Created: {new Date(order.createdAt || order.$createdAt).toLocaleString()}
+                    Created: {new Date(order.createdAt || '').toLocaleString()}
                   </div>
                 </div>
                 <div>
