@@ -1,0 +1,26 @@
+{
+  "name": "360-live-admin",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "appwrite": "^13.0.0",
+    "node-appwrite": "^13.0.0",
+    "next": "14.2.3",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/react": "^18.2.15",
+    "@types/node": "^20.11.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.3"
+  }
+}
+
