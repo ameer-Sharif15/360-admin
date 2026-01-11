@@ -215,6 +215,23 @@ export default function OrdersPage() {
                     Mark Completed
                   </button>
                 )}
+                <button 
+                  onClick={async () => {
+                    if (!confirm(`Are you sure you want to delete this order?`)) return;
+                    setLoading(true);
+                    try {
+                      await clientBundle.databases.deleteDocument(clientBundle.databaseId, COLLECTION, order.$id);
+                      await fetchOrders();
+                    } catch (e: any) {
+                      setError(e.message);
+                    } finally {
+                      setLoading(false);
+                    }
+                  }} 
+                  style={{ ...buttonStyle, background: '#fee2e2', color: '#EF4444' }}
+                >
+                  Delete
+                </button>
               </div>
             </div>
           ))}

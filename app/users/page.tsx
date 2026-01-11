@@ -17,6 +17,39 @@ type User = {
 
 const COLLECTION = 'users';
 
+const inputStyle: React.CSSProperties = {
+  padding: '12px',
+  borderRadius: 8,
+  border: '1px solid #e5e5e5',
+  fontSize: 14,
+};
+
+const buttonStyle: React.CSSProperties = {
+  padding: '12px 16px',
+  borderRadius: 10,
+  border: 'none',
+  background: '#ff7f50',
+  color: '#fff',
+  fontWeight: 700,
+  cursor: 'pointer',
+};
+
+const secondaryButtonStyle: React.CSSProperties = {
+  ...buttonStyle,
+  background: '#6B7280',
+};
+
+const smallButtonStyle: React.CSSProperties = {
+  padding: '6px 12px',
+  borderRadius: 8,
+  border: 'none',
+  background: '#f3f4f6',
+  color: '#1E1E1E',
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
@@ -365,9 +398,28 @@ export default function UsersPage() {
                 <div style={{ color: '#666', fontSize: 13 }}>@{user.username}</div>
                 <div style={{ color: '#999', fontSize: 12 }}>{user.email}</div>
               </div>
-              <button onClick={() => handleEdit(user)} style={buttonStyle}>
-                Edit
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => handleEdit(user)} style={smallButtonStyle}>
+                  Edit
+                </button>
+                <button 
+                  onClick={async () => {
+                    if (!confirm(`Are you sure you want to delete ${user.displayName}?`)) return;
+                    setLoading(true);
+                    try {
+                      await clientBundle.databases.deleteDocument(clientBundle.databaseId, COLLECTION, user.$id);
+                      await fetchUsers();
+                    } catch (e: any) {
+                      setError(e.message);
+                    } finally {
+                      setLoading(false);
+                    }
+                  }} 
+                  style={{ ...smallButtonStyle, background: '#fee2e2', color: '#EF4444' }}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -376,25 +428,5 @@ export default function UsersPage() {
   );
 }
 
-const inputStyle: React.CSSProperties = {
-  padding: '12px',
-  borderRadius: 8,
-  border: '1px solid #e5e5e5',
-  fontSize: 14,
-};
 
-const buttonStyle: React.CSSProperties = {
-  padding: '12px 16px',
-  borderRadius: 10,
-  border: 'none',
-  background: '#ff7f50',
-  color: '#fff',
-  fontWeight: 700,
-  cursor: 'pointer',
-};
-
-const secondaryButtonStyle: React.CSSProperties = {
-  ...buttonStyle,
-  background: '#6B7280',
-};
 

@@ -1,9 +1,7 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/api/users/create/route": "app/api/users/create/route.js",
-  "/orders/page": "app/orders/page.js",
-  "/page": "app/page.js",
-  "/rooms/page": "app/rooms/page.js",
-  "/services/page": "app/services/page.js",
-  "/users/page": "app/users/page.js"
+  "/minimart/page": "app/minimart/page.js",
+  "/activities/page": "app/activities/page.js",
+  "/attendance/page": "app/attendance/page.js",
+  "/users/page": "app/users/page.js",
+  "/page": "app/page.js"
 }
