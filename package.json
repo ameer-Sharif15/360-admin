@@ -10,17 +10,18 @@
   },
   "dependencies": {
     "appwrite": "^13.0.0",
-    "node-appwrite": "^13.0.0",
+    "jspdf": "^4.0.0",
+    "jspdf-autotable": "^5.0.7",
     "next": "14.2.3",
+    "node-appwrite": "^13.0.0",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
-    "typescript": "^5.4.0",
-    "@types/react": "^18.2.15",
     "@types/node": "^20.11.0",
+    "@types/react": "^18.2.15",
     "eslint": "^8.57.0",
-    "eslint-config-next": "14.2.3"
+    "eslint-config-next": "14.2.3",
+    "typescript": "^5.4.0"
   }
 }
-

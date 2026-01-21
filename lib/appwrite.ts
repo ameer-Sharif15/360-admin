@@ -31,8 +31,8 @@ export function getClients() {
     throw new Error('Missing Appwrite configuration for admin dashboard');
   }
   const client = new Client().setEndpoint(endpoint).setProject(projectId);
-  // setKey is available in the Node client; typings in the web bundle omit it, so we cast.
-  // (client as any).setKey(apiKey);
+  // setKey is for Node.js; in the browser SDK, we use addHeader to pass the secret key for CORS bypass.
+  // client.addHeader('X-Appwrite-Key', apiKey);
   const databases = new Databases(client);
   return { client, databases, databaseId, COLLECTIONS };
 }
