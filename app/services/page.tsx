@@ -73,7 +73,6 @@ export default function ServicesPage() {
         name: form.name,
         description: form.description || '',
         icon: form.icon || '',
-        imageUrl: imageUrl,
         branchId: '',
       };
 

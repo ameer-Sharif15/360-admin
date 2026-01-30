@@ -1,10 +1,10 @@
-import { Client, Databases } from 'appwrite';
+import { Client, Databases, Account } from 'appwrite';
 
 const endpoint = 'https://fra.cloud.appwrite.io/v1';
-const projectId = '69336519000e10827583';
-const databaseId = '6933653e00093009e393';
+const projectId = '697c81a100017b683068';
+const databaseId = '697c81e1000f2d677ad7';
 const apiKey =
-  '750b247b1e3aa367cf71b1e67ce2ef81c5836dd98ac0237c944bb682a2877c8ead9b64de7fcf95025b3b0d3297d4fe455506e8a606ea932dc85dfa1620c5e2b8bb83767b36d7c0dae900625aa0adc060078d895a6cb7e149c42a4c5182928fd94f22cb0730ecd6aa7f828f5eaef3bb22545e5c724f422c5f573021bda5edac3b';
+  'standard_5abeca61b9e9aea1f66989c7ee6ef201e95472f83450d4de47799ffae793929ff6af0279a92db4e3f25df63cba2aa3f51b0c4daefaa629a8fe7df2ab3539336f948b57c60efe1b1e6e7f35506b5d64920f134daab07316057614dec2ace3142ddababb908509cd874dcf6119b3e94a9040c448aaee8bafb9e66dbffaee165281';
 
 export const COLLECTIONS = {
   USERS: 'users',
@@ -31,8 +31,7 @@ export function getClients() {
     throw new Error('Missing Appwrite configuration for admin dashboard');
   }
   const client = new Client().setEndpoint(endpoint).setProject(projectId);
-  // setKey is for Node.js; in the browser SDK, we use addHeader to pass the secret key for CORS bypass.
-  // client.addHeader('X-Appwrite-Key', apiKey);
   const databases = new Databases(client);
-  return { client, databases, databaseId, COLLECTIONS };
+  const account = new Account(client);
+  return { client, databases, account, databaseId, COLLECTIONS };
 }

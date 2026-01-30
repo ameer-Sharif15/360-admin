@@ -15,12 +15,14 @@ type MinimartItem = {
   available: boolean;
   image?: string;
   description?: string;
+  sellerId?: string;
 };
 
 const COLLECTION_KEY = "MINI_MART_ITEMS";
 
 export default function MinimartPage() {
   const [items, setItems] = useState<MinimartItem[]>([]);
+  const [sellers, setSellers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -30,6 +32,7 @@ export default function MinimartPage() {
     price: 0,
     stock: 0,
     image: "",
+    sellerId: "",
   });
   const [file, setFile] = useState<File | null>(null);
 
@@ -59,8 +62,23 @@ export default function MinimartPage() {
     }
   };
 
+  const fetchSellers = async () => {
+    if (!clientBundle) return;
+    try {
+      const res = await clientBundle.databases.listDocuments(
+        clientBundle.databaseId,
+        "users",
+        [Query.equal("role", "support"), Query.equal("supportType", "seller")],
+      );
+      setSellers(res.documents);
+    } catch (e: any) {
+      console.error("Failed to fetch sellers:", e.message);
+    }
+  };
+
   useEffect(() => {
     fetchItems();
+    fetchSellers();
   }, [clientBundle]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -83,6 +101,7 @@ export default function MinimartPage() {
         available: form.available ?? true,
         image: imageUrl,
         description: form.description || "",
+        sellerId: form.sellerId || undefined,
       };
 
       if (editingId) {
@@ -113,7 +132,7 @@ export default function MinimartPage() {
   const resetForm = () => {
     setShowForm(false);
     setEditingId(null);
-    setForm({ available: true, price: 0, stock: 0, image: "" });
+    setForm({ available: true, price: 0, stock: 0, image: "", sellerId: "" });
     setFile(null);
   };
 
@@ -281,6 +300,31 @@ export default function MinimartPage() {
                 style={inputStyle}
               />
             </div>
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#333",
+                }}
+              >
+                Assign to Seller (Optional)
+              </label>
+              <select
+                value={form.sellerId || ""}
+                onChange={(e) => setForm({ ...form, sellerId: e.target.value })}
+                style={inputStyle}
+              >
+                <option value="">No Seller (Kitchen)</option>
+                {sellers.map((seller: any) => (
+                  <option key={seller.$id} value={seller.$id}>
+                    {seller.displayName} (@{seller.username})
+                  </option>
+                ))}
+              </select>
+            </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <label
                 style={{
@@ -424,6 +468,20 @@ export default function MinimartPage() {
                     }}
                   >
                     Stock: {item.stock}
+                  </p>
+                )}
+                {item.sellerId && (
+                  <p
+                    style={{
+                      margin: "4px 0",
+                      fontSize: 12,
+                      color: "#10B981",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Seller:{" "}
+                    {sellers.find((s: any) => s.$id === item.sellerId)
+                      ?.displayName || "Unknown"}
                   </p>
                 )}
               </div>

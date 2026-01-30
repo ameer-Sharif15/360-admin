@@ -13,6 +13,7 @@ type User = {
   supportType?: "reception" | "services" | "kitchen";
   branchAssignedId?: string;
   preferredBranchId?: string;
+  location?: string;
 };
 
 const COLLECTION = "users";
@@ -65,6 +66,7 @@ export default function UsersPage() {
     displayName: "",
     email: "",
     password: "",
+    location: "",
   });
   const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -166,6 +168,7 @@ export default function UsersPage() {
           role: createForm.role || "user",
           supportType:
             createForm.role === "support" ? createForm.supportType : undefined,
+          location: createForm.location,
         }),
       });
 
@@ -184,6 +187,7 @@ export default function UsersPage() {
         displayName: "",
         email: "",
         password: "",
+        location: "",
       });
       setShowCreateForm(false);
       await fetchUsers();
@@ -311,6 +315,14 @@ export default function UsersPage() {
               }
               style={inputStyle}
             />
+            <input
+              placeholder="Location (optional)"
+              value={createForm.location || ""}
+              onChange={(e) =>
+                setCreateForm((f) => ({ ...f, location: e.target.value }))
+              }
+              style={inputStyle}
+            />
             <select
               value={createForm.role || "user"}
               onChange={(e) =>
@@ -366,6 +378,7 @@ export default function UsersPage() {
                     displayName: "",
                     email: "",
                     password: "",
+                    location: "",
                   });
                 }}
                 style={secondaryButtonStyle}

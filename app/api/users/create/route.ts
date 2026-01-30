@@ -1,17 +1,16 @@
 import { Account, Client, Databases, ID } from 'appwrite';
 import { NextRequest, NextResponse } from 'next/server';
 
-const endpoint = process.env.APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1';
-const projectId = process.env.APPWRITE_PROJECT_ID || '69336519000e10827583';
-const databaseId = process.env.APPWRITE_DATABASE_ID || '6933653e00093009e393';
+const endpoint =  'https://fra.cloud.appwrite.io/v1';
+const projectId = '697c81a100017b683068';
+const databaseId = '697c81e1000f2d677ad7';
 const apiKey =
-  process.env.APPWRITE_API_KEY ||
-  'standard_01c8ddf62537f29931af581794f1191d169548c4599c56d9b5458cad75c5477b152e18eeb87a84c130b1702fa564001be766610f7fc11a1b75b5a4e087c515ff2448a838a47c3e4e890a47a2753b33b35ef0a9c95abb78fb971b49bb5207f132200838a15cd74e8c1b00d7d8b5393f0f153a68558082140b4a2bd5b6cf9da958';
+  'standard_5abeca61b9e9aea1f66989c7ee6ef201e95472f83450d4de47799ffae793929ff6af0279a92db4e3f25df63cba2aa3f51b0c4daefaa629a8fe7df2ab3539336f948b57c60efe1b1e6e7f35506b5d64920f134daab07316057614dec2ace3142ddababb908509cd874dcf6119b3e94a9040c448aaee8bafb9e66dbffaee165281';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { username, displayName, email, password, role, supportType } = body;
+    const { username, displayName, email, password, role, supportType, location } = body;
 
     if (!username || !displayName || !email || !password) {
       return NextResponse.json(
@@ -52,6 +51,7 @@ export async function POST(request: NextRequest) {
         supportType: role === 'support' ? supportType : undefined,
         branchAssignedId: '',
         preferredBranchId: '',
+        location: location || '',
       }
     );
 
