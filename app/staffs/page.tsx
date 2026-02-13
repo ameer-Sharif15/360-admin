@@ -28,8 +28,8 @@ export default function StaffsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<StaffMember>>({ active: true });
   const [showCardModal, setShowCardModal] = useState(false);
-  const [selectedCardMember, setSelectedCardMember] =
-    useState<StaffMember | null>(null);
+  const [previewMembers, setPreviewMembers] = useState<StaffMember[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Image Upload State
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -150,6 +150,30 @@ export default function StaffsPage() {
     setImageFile(null);
   };
 
+  const toggleSelection = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const handleBulkGenerate = () => {
+    const selectedMembers = staff.filter((s) => selectedIds.has(s.$id));
+    setPreviewMembers(selectedMembers);
+    setShowCardModal(true);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(new Set(staff.map((s) => s.$id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
   return (
     <div style={{ display: "grid", gap: 24 }}>
       <div
@@ -160,9 +184,19 @@ export default function StaffsPage() {
         }}
       >
         <h2 style={{ margin: 0 }}>Staff Directory</h2>
-        <button onClick={handleCreateNew} style={buttonStyle}>
-          {showForm ? "Cancel" : "+ Add Staff"}
-        </button>
+        <div style={{ display: "flex", gap: 12 }}>
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleBulkGenerate}
+              style={{ ...buttonStyle, background: "#3B82F6" }}
+            >
+              Generate IDs ({selectedIds.size})
+            </button>
+          )}
+          <button onClick={handleCreateNew} style={buttonStyle}>
+            {showForm ? "Cancel" : "+ Add Staff"}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -342,18 +376,63 @@ export default function StaffsPage() {
 
       <div
         style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 16,
+        }}
+      >
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            cursor: "pointer",
+            fontWeight: 600,
+          }}
+        >
+          <input
+            type="checkbox"
+            onChange={(e) => handleSelectAll(e.target.checked)}
+            checked={staff.length > 0 && selectedIds.size === staff.length}
+          />
+          Select All
+        </label>
+        <span style={{ fontSize: 14, color: "#666" }}>
+          {selectedIds.size} selected
+        </span>
+      </div>
+
+      <div
+        style={{
           display: "grid",
           gap: 16,
           gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
         }}
       >
         {staff.map((member) => (
-          <div key={member.$id} style={cardStyle}>
+          <div key={member.$id} style={{ ...cardStyle, position: "relative" }}>
+            <div
+              style={{
+                position: "absolute",
+                top: 16,
+                left: 16,
+                zIndex: 10,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selectedIds.has(member.$id)}
+                onChange={() => toggleSelection(member.$id)}
+                style={{ width: 18, height: 18, cursor: "pointer" }}
+              />
+            </div>
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "start",
+                paddingLeft: 30, // Make space for checkbox
               }}
             >
               <div>
@@ -386,7 +465,7 @@ export default function StaffsPage() {
             <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
               <button
                 onClick={() => {
-                  setSelectedCardMember(member);
+                  setPreviewMembers([member]);
                   setShowCardModal(true);
                 }}
                 style={{
@@ -419,7 +498,7 @@ export default function StaffsPage() {
         {staff.length === 0 && !loading && <p>No staff members found.</p>}
       </div>
 
-      {showCardModal && selectedCardMember && (
+      {showCardModal && previewMembers.length > 0 && (
         <div style={modalOverlayStyle}>
           <div style={modalContentStyle}>
             <div
@@ -430,7 +509,9 @@ export default function StaffsPage() {
                 marginBottom: 20,
               }}
             >
-              <h3 style={{ margin: 0 }}>Staff ID Card Preview</h3>
+              <h3 style={{ margin: 0 }}>
+                Staff ID Cards ({previewMembers.length})
+              </h3>
               <div style={{ display: "flex", gap: 10 }}>
                 <button
                   onClick={() => window.print()}
@@ -445,7 +526,7 @@ export default function StaffsPage() {
                 <button
                   onClick={() => {
                     setShowCardModal(false);
-                    setSelectedCardMember(null);
+                    setPreviewMembers([]);
                   }}
                   style={{
                     ...buttonStyle,
@@ -462,337 +543,359 @@ export default function StaffsPage() {
               className="print-area"
               style={{
                 display: "flex",
-                gap: 20,
+                gap: 40,
                 flexWrap: "wrap",
                 justifyContent: "center",
+                // For printing, we might want page breaks or specific grid
               }}
             >
-              {/* Front of Card */}
-              <div style={idCardStyle}>
-                <div style={idCardHeaderStyle}>
-                  {/* Logo Placeholder */}
-                  <div
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: "50%",
-                      background: "#fff",
-                      margin: "0 auto 5px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <img
-                      src="/logo.png"
-                      alt="Logo"
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "contain",
-                      }}
-                    />
-                  </div>
-                  <h4
-                    style={{
-                      margin: 0,
-                      fontSize: 13,
-                      fontWeight: 900,
-                      letterSpacing: 0.5,
-                      lineHeight: 1.1,
-                    }}
-                  >
-                    360 DEGREE GLOBAL ESTATE LTD.
-                  </h4>
-                  <div
-                    style={{
-                      fontSize: 7,
-                      fontWeight: 600,
-                      marginTop: 2,
-                      lineHeight: 1.1,
-                      opacity: 0.9,
-                    }}
-                  >
-                    ADDRESS: NSUK 2nd Gate, Behind Princess Sarah Hotel
-                    <br />
-                    Keffi, Nasarawa State.
-                    <br />
-                    TEL: 08038923692, 08136661966
-                    <br />
-                    WEBSITE: www.360degreeglobal.org
-                    <br />
-                    EMAIL: info@360degreeglobal.org
-                  </div>
-                </div>
-
+              {previewMembers.map((member) => (
                 <div
+                  key={member.$id}
                   style={{
-                    position: "relative",
-                    flex: 1,
                     display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    padding: "4px 0",
+                    gap: 20,
+                    marginBottom: 40,
+                    pageBreakInside: "avoid", // Prevent splitting card across pages
                   }}
                 >
-                  {/* Side Text */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: 0,
-                      top: 10,
-                      bottom: 10,
-                      width: 24,
-                      background: "#ff7f50", // Orange accent
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderTopRightRadius: 8,
-                      borderBottomRightRadius: 8,
-                    }}
-                  >
-                    <span
-                      style={{
-                        writingMode: "vertical-rl",
-                        transform: "rotate(180deg)",
-                        color: "#fff",
-                        fontWeight: 800,
-                        fontSize: 11,
-                        letterSpacing: 1.5,
-                      }}
-                    >
-                      STAFF IDENTITY CARD
-                    </span>
-                  </div>
-
-                  {/* Photo Frame */}
-                  <div
-                    style={{
-                      width: 100,
-                      height: 110,
-                      background: "#fff",
-                      border: "3px solid #ff7f50",
-                      borderRadius: 12,
-                      overflow: "hidden",
-                      marginBottom: 4,
-                      boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                    }}
-                  >
-                    {selectedCardMember.photoUrl ? (
-                      <img
-                        src={selectedCardMember.photoUrl}
-                        alt="Staff"
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                        }}
-                      />
-                    ) : (
+                  {/* Front of Card */}
+                  <div style={idCardStyle}>
+                    <div style={idCardHeaderStyle}>
+                      {/* Logo Placeholder */}
                       <div
                         style={{
-                          width: "100%",
-                          height: "100%",
-                          background: "#eee",
+                          width: 40,
+                          height: 40,
+                          borderRadius: "50%",
+                          background: "#fff",
+                          margin: "0 auto 5px",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          fontSize: 40,
+                          overflow: "hidden",
                         }}
                       >
-                        👤
+                        <img
+                          src="/logo.png"
+                          alt="Logo"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "contain",
+                          }}
+                        />
                       </div>
-                    )}
+                      <h4
+                        style={{
+                          margin: 0,
+                          fontSize: 13,
+                          fontWeight: 900,
+                          letterSpacing: 0.5,
+                          lineHeight: 1.1,
+                        }}
+                      >
+                        360 DEGREE GLOBAL ESTATE LTD.
+                      </h4>
+                      <div
+                        style={{
+                          fontSize: 7,
+                          fontWeight: 600,
+                          marginTop: 2,
+                          lineHeight: 1.1,
+                          opacity: 0.9,
+                        }}
+                      >
+                        ADDRESS: NSUK 2nd Gate, Behind Princess Sarah Hotel
+                        <br />
+                        Keffi, Nasarawa State.
+                        <br />
+                        TEL: 08038923692, 08136661966
+                        <br />
+                        WEBSITE: www.360degreeglobal.org
+                        <br />
+                        EMAIL: info@360degreeglobal.org
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        position: "relative",
+                        flex: 1,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        padding: "4px 0",
+                      }}
+                    >
+                      {/* Side Text */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          top: 10,
+                          bottom: 10,
+                          width: 24,
+                          background: "#ff7f50", // Orange accent
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderTopRightRadius: 8,
+                          borderBottomRightRadius: 8,
+                        }}
+                      >
+                        <span
+                          style={{
+                            writingMode: "vertical-rl",
+                            transform: "rotate(180deg)",
+                            color: "#fff",
+                            fontWeight: 800,
+                            fontSize: 11,
+                            letterSpacing: 1.5,
+                          }}
+                        >
+                          STAFF IDENTITY CARD
+                        </span>
+                      </div>
+
+                      {/* Photo Frame */}
+                      <div
+                        style={{
+                          width: 100,
+                          height: 110,
+                          background: "#fff",
+                          border: "3px solid #ff7f50",
+                          borderRadius: 12,
+                          overflow: "hidden",
+                          marginBottom: 4,
+                          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                        }}
+                      >
+                        {member.photoUrl ? (
+                          <img
+                            src={member.photoUrl}
+                            alt="Staff"
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              background: "#eee",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 40,
+                            }}
+                          >
+                            👤
+                          </div>
+                        )}
+                      </div>
+
+                      <div
+                        style={{
+                          textAlign: "center",
+                          width: "100%",
+                          paddingLeft: 24,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 9,
+                            color: "#cf1322",
+                            fontWeight: 800,
+                          }}
+                        >
+                          NAME:
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 900,
+                            color: "#1a365d",
+                            textTransform: "uppercase",
+                            marginBottom: 2,
+                            lineHeight: 1.1,
+                          }}
+                        >
+                          {member.name}
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: 9,
+                            color: "#cf1322",
+                            fontWeight: 800,
+                          }}
+                        >
+                          RANK:{" "}
+                          <span style={{ color: "#1a365d" }}>
+                            {member.position || "STAFF"}
+                          </span>
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: 9,
+                            color: "#cf1322",
+                            fontWeight: 800,
+                          }}
+                        >
+                          ID NO:{" "}
+                          <span style={{ color: "#1a365d" }}>
+                            {member.employeeId || "N/A"}
+                          </span>
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: 9,
+                            color: "#cf1322",
+                            fontWeight: 800,
+                          }}
+                        >
+                          PHONE:{" "}
+                          <span style={{ color: "#1a365d" }}>
+                            {member.phone || "N/A"}
+                          </span>
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: 9,
+                            color: "#cf1322",
+                            fontWeight: 800,
+                            wordBreak: "break-all",
+                            lineHeight: 1,
+                          }}
+                        >
+                          EMAIL:{" "}
+                          <span style={{ color: "#1a365d" }}>
+                            {member.email || "N/A"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom Accents */}
+                    <div style={{ height: 10, display: "flex" }}>
+                      <div style={{ flex: 1, background: "#1a365d" }}></div>
+                      <div style={{ width: 20, background: "#ff7f50" }}></div>
+                      <div style={{ flex: 1, background: "#1a365d" }}></div>
+                    </div>
                   </div>
 
-                  <div
-                    style={{
-                      textAlign: "center",
-                      width: "100%",
-                      paddingLeft: 24,
-                    }}
-                  >
-                    <div
-                      style={{ fontSize: 9, color: "#cf1322", fontWeight: 800 }}
-                    >
-                      NAME:
-                    </div>
+                  {/* Back of Card */}
+                  <div style={idCardStyle}>
                     <div
                       style={{
-                        fontSize: 14,
-                        fontWeight: 900,
-                        color: "#1a365d",
-                        textTransform: "uppercase",
-                        marginBottom: 2,
-                        lineHeight: 1.1,
+                        padding: 20,
+                        textAlign: "center",
+                        display: "flex",
+                        flexDirection: "column",
+                        height: "100%",
+                        justifyContent: "space-between",
                       }}
                     >
-                      {selectedCardMember.name}
-                    </div>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: 10,
+                            fontStyle: "italic",
+                            fontWeight: 600,
+                            color: "#1a365d",
+                            marginBottom: 10,
+                          }}
+                        >
+                          This is to certify that the holder whose Name,
+                          Photograph and Signature appears on the front is a
+                          staff of
+                        </div>
+                        <h4
+                          style={{
+                            margin: "0 0 10px",
+                            fontSize: 14,
+                            fontWeight: 900,
+                            color: "#1a365d",
+                          }}
+                        >
+                          360 DEGREE
+                          <br />
+                          GLOBAL ESTATE LTD.
+                        </h4>
+                      </div>
 
-                    <div
-                      style={{
-                        fontSize: 9,
-                        color: "#cf1322",
-                        fontWeight: 800,
-                      }}
-                    >
-                      RANK:{" "}
-                      <span style={{ color: "#1a365d" }}>
-                        {selectedCardMember.position || "STAFF"}
-                      </span>
-                    </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "center",
+                          margin: "10px 0",
+                        }}
+                      >
+                        {/* QR Code */}
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${member.$id}`}
+                          alt="QR Code"
+                          style={{
+                            width: 80,
+                            height: 80,
+                            border: "1px solid #eee",
+                          }}
+                        />
+                      </div>
 
-                    <div
-                      style={{
-                        fontSize: 9,
-                        color: "#cf1322",
-                        fontWeight: 800,
-                      }}
-                    >
-                      ID NO:{" "}
-                      <span style={{ color: "#1a365d" }}>
-                        {selectedCardMember.employeeId || "N/A"}
-                      </span>
-                    </div>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: 9,
+                            fontStyle: "italic",
+                            color: "#1a365d",
+                            marginBottom: 20,
+                          }}
+                        >
+                          If found, Please return to the above address or to the
+                          nearest Police Station.
+                        </div>
 
-                    <div
-                      style={{
-                        fontSize: 9,
-                        color: "#cf1322",
-                        fontWeight: 800,
-                      }}
-                    >
-                      PHONE:{" "}
-                      <span style={{ color: "#1a365d" }}>
-                        {selectedCardMember.phone || "N/A"}
-                      </span>
-                    </div>
+                        <div
+                          style={{
+                            width: 120,
+                            borderBottom: "1px solid #1a365d",
+                            margin: "0 auto 4px",
+                          }}
+                        ></div>
+                        <div
+                          style={{
+                            fontSize: 8,
+                            fontWeight: 700,
+                            color: "#1a365d",
+                          }}
+                        >
+                          Authorised Signature
+                        </div>
 
-                    <div
-                      style={{
-                        fontSize: 9,
-                        color: "#cf1322",
-                        fontWeight: 800,
-                        wordBreak: "break-all",
-                        lineHeight: 1,
-                      }}
-                    >
-                      EMAIL:{" "}
-                      <span style={{ color: "#1a365d" }}>
-                        {selectedCardMember.email || "N/A"}
-                      </span>
+                        {/* Barcode Mockup */}
+                        <div
+                          style={{
+                            marginTop: 10,
+                            height: 20,
+                            background:
+                              "repeating-linear-gradient(90deg, #000, #000 1px, #fff 1px, #fff 2px)",
+                            width: "80%",
+                            margin: "10px auto 0",
+                          }}
+                        ></div>
+                      </div>
                     </div>
                   </div>
                 </div>
-
-                {/* Bottom Accents */}
-                <div style={{ height: 10, display: "flex" }}>
-                  <div style={{ flex: 1, background: "#1a365d" }}></div>
-                  <div style={{ width: 20, background: "#ff7f50" }}></div>
-                  <div style={{ flex: 1, background: "#1a365d" }}></div>
-                </div>
-              </div>
-
-              {/* Back of Card */}
-              <div style={idCardStyle}>
-                <div
-                  style={{
-                    padding: 20,
-                    textAlign: "center",
-                    display: "flex",
-                    flexDirection: "column",
-                    height: "100%",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        fontStyle: "italic",
-                        fontWeight: 600,
-                        color: "#1a365d",
-                        marginBottom: 10,
-                      }}
-                    >
-                      This is to certify that the holder whose Name, Photograph
-                      and Signature appears on the front is a staff of
-                    </div>
-                    <h4
-                      style={{
-                        margin: "0 0 10px",
-                        fontSize: 14,
-                        fontWeight: 900,
-                        color: "#1a365d",
-                      }}
-                    >
-                      360 DEGREE
-                      <br />
-                      GLOBAL ESTATE LTD.
-                    </h4>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      margin: "10px 0",
-                    }}
-                  >
-                    {/* QR Code */}
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${selectedCardMember.$id}`}
-                      alt="QR Code"
-                      style={{
-                        width: 80,
-                        height: 80,
-                        border: "1px solid #eee",
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <div
-                      style={{
-                        fontSize: 9,
-                        fontStyle: "italic",
-                        color: "#1a365d",
-                        marginBottom: 20,
-                      }}
-                    >
-                      If found, Please return to the above address or to the
-                      nearest Police Station.
-                    </div>
-
-                    <div
-                      style={{
-                        width: 120,
-                        borderBottom: "1px solid #1a365d",
-                        margin: "0 auto 4px",
-                      }}
-                    ></div>
-                    <div
-                      style={{ fontSize: 8, fontWeight: 700, color: "#1a365d" }}
-                    >
-                      Authorised Signature
-                    </div>
-
-                    {/* Barcode Mockup */}
-                    <div
-                      style={{
-                        marginTop: 10,
-                        height: 20,
-                        background:
-                          "repeating-linear-gradient(90deg, #000, #000 1px, #fff 1px, #fff 2px)",
-                        width: "80%",
-                        margin: "10px auto 0",
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
 
             <style jsx global>{`

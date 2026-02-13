@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { Query, type Models } from 'appwrite';
-import { useEffect, useMemo, useState } from 'react';
-import { getClients } from '../../lib/appwrite';
+import { Query, type Models } from "appwrite";
+import { useEffect, useMemo, useState } from "react";
+import { getClients } from "../../lib/appwrite";
 
 type Order = {
   $id: string;
@@ -13,17 +13,17 @@ type Order = {
   checkInDate: string;
   numberOfDays: number;
   totalAmount: number;
-  status: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+  status: "pending" | "confirmed" | "in_progress" | "completed" | "cancelled";
   createdAt: string;
 };
 
-const COLLECTION = 'orders';
+const COLLECTION = "orders";
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const clientBundle = useMemo(() => {
     try {
@@ -40,15 +40,13 @@ export default function OrdersPage() {
     setError(null);
     try {
       const queries: string[] = [];
-      if (statusFilter !== 'all') {
-        queries.push(Query.equal('status', statusFilter));
+      if (statusFilter !== "all") {
+        queries.push(Query.equal("status", statusFilter));
       }
-      queries.push(Query.orderDesc('$createdAt'));
-      const res = await clientBundle.databases.listDocuments<Order & Models.Document>(
-        clientBundle.databaseId,
-        COLLECTION,
-        queries
-      );
+      queries.push(Query.orderDesc("$createdAt"));
+      const res = await clientBundle.databases.listDocuments<
+        Order & Models.Document
+      >(clientBundle.databaseId, COLLECTION, queries);
       setOrders(res.documents);
     } catch (e: any) {
       setError(e.message);
@@ -62,7 +60,10 @@ export default function OrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
-  const handleStatusUpdate = async (orderId: string, newStatus: Order['status']) => {
+  const handleStatusUpdate = async (
+    orderId: string,
+    newStatus: Order["status"],
+  ) => {
     if (!clientBundle) return;
     setLoading(true);
     setError(null);
@@ -73,7 +74,7 @@ export default function OrdersPage() {
         orderId,
         {
           status: newStatus,
-        }
+        },
       );
       await fetchOrders();
     } catch (e: any) {
@@ -85,33 +86,33 @@ export default function OrdersPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending':
-        return '#FF7F50';
-      case 'confirmed':
-        return '#10B981';
-      case 'in_progress':
-        return '#3B82F6';
-      case 'completed':
-        return '#10B981';
-      case 'cancelled':
-        return '#EF4444';
+      case "pending":
+        return "#FF7F50";
+      case "confirmed":
+        return "#10B981";
+      case "in_progress":
+        return "#3B82F6";
+      case "completed":
+        return "#10B981";
+      case "cancelled":
+        return "#EF4444";
       default:
-        return '#6B7280';
+        return "#6B7280";
     }
   };
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
+    <div style={{ display: "grid", gap: 16 }}>
       <div
         style={{
-          background: '#fff',
+          background: "#fff",
           padding: 16,
           borderRadius: 12,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+          boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
         }}
       >
         <h2 style={{ marginTop: 0 }}>Orders Management</h2>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
+        {error && <p style={{ color: "red" }}>{error}</p>}
         <div style={{ marginBottom: 16 }}>
           <label style={{ marginRight: 8 }}>Filter by Status:</label>
           <select
@@ -131,44 +132,51 @@ export default function OrdersPage() {
 
       <div
         style={{
-          background: '#fff',
+          background: "#fff",
           padding: 16,
           borderRadius: 12,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+          boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
         }}
       >
         <h3 style={{ marginTop: 0 }}>Orders ({orders.length})</h3>
         {loading && <p>Loading...</p>}
         {!loading && orders.length === 0 && <p>No orders found.</p>}
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div style={{ display: "grid", gap: 12 }}>
           {orders.map((order) => (
             <div
               key={order.$id}
               style={{
                 padding: 16,
                 borderRadius: 10,
-                border: '1px solid #eee',
+                border: "1px solid #eee",
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 12,
+                }}
+              >
                 <div>
                   <strong>Order #{order.$id.slice(0, 8)}</strong>
-                  <div style={{ color: '#666', fontSize: 13, marginTop: 4 }}>
-                    Type: {order.orderType} • Days: {order.numberOfDays} • Amount: ${order.totalAmount}
+                  <div style={{ color: "#666", fontSize: 13, marginTop: 4 }}>
+                    Type: {order.orderType} • Days: {order.numberOfDays} •
+                    Amount: ₦{order.totalAmount}
                   </div>
-                  <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
+                  <div style={{ color: "#999", fontSize: 12, marginTop: 4 }}>
                     Check-in: {new Date(order.checkInDate).toLocaleDateString()}
                   </div>
-                  <div style={{ color: '#999', fontSize: 12 }}>
-                    Created: {new Date(order.createdAt || '').toLocaleString()}
+                  <div style={{ color: "#999", fontSize: 12 }}>
+                    Created: {new Date(order.createdAt || "").toLocaleString()}
                   </div>
                 </div>
                 <div>
                   <span
                     style={{
-                      background: getStatusColor(order.status) + '20',
+                      background: getStatusColor(order.status) + "20",
                       color: getStatusColor(order.status),
-                      padding: '4px 12px',
+                      padding: "4px 12px",
                       borderRadius: 6,
                       fontSize: 12,
                       fontWeight: 600,
@@ -178,57 +186,66 @@ export default function OrdersPage() {
                   </span>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                {order.status === 'pending' && (
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                {order.status === "pending" && (
                   <>
                     <button
-                      onClick={() => handleStatusUpdate(order.$id, 'confirmed')}
+                      onClick={() => handleStatusUpdate(order.$id, "confirmed")}
                       disabled={loading}
-                      style={{ ...buttonStyle, background: '#10B981' }}
+                      style={{ ...buttonStyle, background: "#10B981" }}
                     >
                       Confirm
                     </button>
                     <button
-                      onClick={() => handleStatusUpdate(order.$id, 'cancelled')}
+                      onClick={() => handleStatusUpdate(order.$id, "cancelled")}
                       disabled={loading}
-                      style={{ ...buttonStyle, background: '#EF4444' }}
+                      style={{ ...buttonStyle, background: "#EF4444" }}
                     >
                       Cancel
                     </button>
                   </>
                 )}
-                {order.status === 'confirmed' && (
+                {order.status === "confirmed" && (
                   <button
-                    onClick={() => handleStatusUpdate(order.$id, 'in_progress')}
+                    onClick={() => handleStatusUpdate(order.$id, "in_progress")}
                     disabled={loading}
-                    style={{ ...buttonStyle, background: '#3B82F6' }}
+                    style={{ ...buttonStyle, background: "#3B82F6" }}
                   >
                     Mark In Progress
                   </button>
                 )}
-                {order.status === 'in_progress' && (
+                {order.status === "in_progress" && (
                   <button
-                    onClick={() => handleStatusUpdate(order.$id, 'completed')}
+                    onClick={() => handleStatusUpdate(order.$id, "completed")}
                     disabled={loading}
-                    style={{ ...buttonStyle, background: '#10B981' }}
+                    style={{ ...buttonStyle, background: "#10B981" }}
                   >
                     Mark Completed
                   </button>
                 )}
-                <button 
+                <button
                   onClick={async () => {
-                    if (!confirm(`Are you sure you want to delete this order?`)) return;
+                    if (!confirm(`Are you sure you want to delete this order?`))
+                      return;
                     setLoading(true);
                     try {
-                      await clientBundle.databases.deleteDocument(clientBundle.databaseId, COLLECTION, order.$id);
+                      await clientBundle.databases.deleteDocument(
+                        clientBundle.databaseId,
+                        COLLECTION,
+                        order.$id,
+                      );
                       await fetchOrders();
                     } catch (e: any) {
                       setError(e.message);
                     } finally {
                       setLoading(false);
                     }
-                  }} 
-                  style={{ ...buttonStyle, background: '#fee2e2', color: '#EF4444' }}
+                  }}
+                  style={{
+                    ...buttonStyle,
+                    background: "#fee2e2",
+                    color: "#EF4444",
+                  }}
                 >
                   Delete
                 </button>
@@ -242,19 +259,18 @@ export default function OrdersPage() {
 }
 
 const inputStyle: React.CSSProperties = {
-  padding: '12px',
+  padding: "12px",
   borderRadius: 8,
-  border: '1px solid #e5e5e5',
+  border: "1px solid #e5e5e5",
   fontSize: 14,
 };
 
 const buttonStyle: React.CSSProperties = {
-  padding: '8px 16px',
+  padding: "8px 16px",
   borderRadius: 8,
-  border: 'none',
-  color: '#fff',
+  border: "none",
+  color: "#fff",
   fontWeight: 600,
-  cursor: 'pointer',
+  cursor: "pointer",
   fontSize: 14,
 };
-

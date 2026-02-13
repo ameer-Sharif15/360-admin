@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       // Only allow specific admin emails
       const allowedEmails = [
-        "modibbomikail@gmail.com",
+        "modibboakheem@gmail.com",
         "hafeezabubakar15@gmail.com",
       ];
       if (!allowedEmails.includes(email)) {

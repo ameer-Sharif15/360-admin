@@ -21,45 +21,20 @@
       "static/chunks/main-app.js",
       "static/chunks/app/users/page.js"
     ],
-    "/staffs/page": [
+    "/orders/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/staffs/page.js"
-    ],
-    "/sellers/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/sellers/page.js"
+      "static/chunks/app/orders/page.js"
     ],
     "/attendance/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/attendance/page.js"
     ],
-    "/orders/page": [
+    "/staffs/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/orders/page.js"
-    ],
-    "/minimart/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/minimart/page.js"
-    ],
-    "/services/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/services/page.js"
-    ],
-    "/rooms/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/rooms/page.js"
-    ],
-    "/activities/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/activities/page.js"
+      "static/chunks/app/staffs/page.js"
     ]
   }
 }
