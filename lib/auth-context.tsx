@@ -50,6 +50,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const { account } = getClients();
 
+      // Check if session exists and delete it
+      try {
+        await account.deleteSession("current");
+      } catch (error) {
+        // No session to delete or error deleting, ignore
+      }
+
       // Create email session (correct method name)
       await account.createEmailSession(email, password);
 
