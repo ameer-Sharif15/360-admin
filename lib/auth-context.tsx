@@ -3,10 +3,18 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getClients } from "./appwrite";
-import { Models } from "appwrite";
+
+export interface AdminUser {
+  $id?: string;
+  _id?: string;
+  email: string;
+  name?: string;
+  displayName?: string;
+  role?: string;
+}
 
 type AuthContextType = {
-  user: Models.User<Models.Preferences> | null;
+  user: AdminUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -15,9 +23,7 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<Models.User<Models.Preferences> | null>(
-    null,
-  );
+  const [user, setUser] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -39,36 +45,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      // Only allow specific admin emails
       const allowedEmails = [
         "modibboakheem@gmail.com",
         "hafeezabubakar15@gmail.com",
       ];
-      if (!allowedEmails.includes(email)) {
+      if (!allowedEmails.includes(email.toLowerCase())) {
         throw new Error("Unauthorized: Only admin can access this dashboard");
       }
 
       const { account } = getClients();
 
-      // Check if session exists and delete it
-      try {
-        await account.deleteSession("current");
-      } catch (error) {
-        // No session to delete or error deleting, ignore
-      }
+      // Clear any previous token
+      await account.deleteSession("current");
 
-      // Create email session (correct method name)
+      // Login via Express backend
       await account.createEmailSession(email, password);
 
-      // Get user details
+      // Verify user
       const currentUser = await account.get();
-
-      // Double-check email matches
-      if (!allowedEmails.includes(currentUser.email)) {
-        await account.deleteSession("current");
-        throw new Error("Unauthorized: Only admin can access this dashboard");
-      }
-
       setUser(currentUser);
 
       router.push("/");

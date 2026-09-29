@@ -1,7 +1,7 @@
 "use client";
-import { ID, Query, type Models } from "appwrite";
-import { useEffect, useMemo, useState } from "react";
-import { getClients } from "../../lib/appwrite";
+
+import React, { useEffect, useMemo, useState } from "react";
+import { getClients, ID, Query, type Models } from "../../lib/appwrite";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 

@@ -1,8 +1,7 @@
 "use client";
 
-import { Query, type Models } from "appwrite";
-import { useEffect, useMemo, useState } from "react";
-import { getClients } from "../../lib/appwrite";
+import React, { useEffect, useMemo, useState } from "react";
+import { getClients, Query, type Models } from "../../lib/appwrite";
 
 type Order = {
   $id: string;
@@ -39,7 +38,7 @@ export default function OrdersPage() {
     setLoading(true);
     setError(null);
     try {
-      const queries: string[] = [];
+      const queries: any[] = [];
       if (statusFilter !== "all") {
         queries.push(Query.equal("status", statusFilter));
       }

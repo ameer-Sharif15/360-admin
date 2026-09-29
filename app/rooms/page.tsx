@@ -1,8 +1,7 @@
 "use client";
 
-import { ID, type Models } from "appwrite";
-import { useEffect, useMemo, useState } from "react";
-import { getClients } from "../../lib/appwrite";
+import React, { useEffect, useMemo, useState } from "react";
+import { getClients, ID, type Models } from "../../lib/appwrite";
 import { uploadToCloudinary } from "../../lib/cloudinary";
 
 type Room = {
@@ -413,7 +412,7 @@ export default function RoomsPage() {
                   <span
                     style={{ fontSize: 16, fontWeight: 700, color: "#ff7f50" }}
                   >
-                    ₦{room.price.toLocaleString()}
+                    ₦{(Number(room.price) || 0).toLocaleString()}
                   </span>
                 </div>
                 <p style={{ margin: "4px 0", fontSize: 12, color: "#666" }}>

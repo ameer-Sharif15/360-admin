@@ -1,6 +1,6 @@
 'use client';
 
-import { ID, Query, type Models } from 'appwrite';
+import { ID, Query, type Models } from '../../lib/appwrite';
 import { useEffect, useMemo, useState } from 'react';
 import { getClients } from '../../lib/appwrite';
 import { uploadToCloudinary } from '../../lib/cloudinary';

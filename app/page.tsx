@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { getClients } from "../lib/appwrite";
-import { Query, Models } from "appwrite";
+import { getClients, Query, Models } from "../lib/appwrite";
 
 type Stats = {
   users: number;

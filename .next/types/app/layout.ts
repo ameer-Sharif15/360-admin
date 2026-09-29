@@ -1,4 +1,4 @@
-// File: C:\Users\hafee\Desktop\projects\360-live\admin\app\layout.tsx
+// File: C:\Users\USER\Desktop\projects\360-live\admin\app\layout.tsx
 import * as entry from '../../../app/layout.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
