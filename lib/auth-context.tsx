@@ -48,9 +48,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const allowedEmails = [
         "modibboakheem@gmail.com",
         "hafeezabubakar15@gmail.com",
+        "director@360.com",
+        "admin@360.com",
+        "admin@gmail.com",
+        "services@gmail.com",
+        "reception@gmail.com",
+        "kitchen@gmail.com",
       ];
       if (!allowedEmails.includes(email.toLowerCase())) {
-        throw new Error("Unauthorized: Only admin can access this dashboard");
+        throw new Error("Unauthorized: Only admin and management can access this dashboard");
       }
 
       const { account } = getClients();

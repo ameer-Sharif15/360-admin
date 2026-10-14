@@ -11,7 +11,10 @@ type Service = {
   description?: string;
   icon?: string;
   imageUrl?: string;
-  branchId: string;
+  branchId?: string;
+  price?: number;
+  category?: string;
+  available?: boolean;
 };
 
 const COLLECTION = 'services';
@@ -73,7 +76,11 @@ export default function ServicesPage() {
         name: form.name,
         description: form.description || '',
         icon: form.icon || '',
-        branchId: '',
+        imageUrl: imageUrl,
+        image: imageUrl,
+        price: Number(form.price) || 0,
+        category: form.category || 'General',
+        available: form.available ?? true,
       };
 
       if (editingId) {

@@ -56,12 +56,15 @@ const normalize = (doc: any): any => {
   const id = doc._id || doc.$id || doc.id;
   const createdAt = doc.createdAt || doc.$createdAt || new Date().toISOString();
   const updatedAt = doc.updatedAt || doc.$updatedAt || createdAt;
+  const img = doc.imageUrl || doc.image || doc.photoUrl || '';
   return {
     ...doc,
     $id: id,
     _id: id,
     $createdAt: createdAt,
     $updatedAt: updatedAt,
+    image: img || doc.image || '',
+    imageUrl: img || doc.imageUrl || '',
   };
 };
 

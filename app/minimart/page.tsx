@@ -95,11 +95,12 @@ export default function MinimartPage() {
       const data = {
         name: form.name,
         price: Number(form.price) || 0,
-        category: form.category || "",
+        category: form.category || "General",
         stock: Number(form.stock) || 0,
         available: form.available ?? true,
         image: imageUrl,
-        description: form.description || "",
+        imageUrl: imageUrl,
+        description: form.description || `${form.name || "Item"} in Mini-mart`,
         sellerId: form.sellerId || undefined,
       };
 
@@ -137,7 +138,11 @@ export default function MinimartPage() {
 
   const handleEdit = (item: MinimartItem) => {
     setEditingId(item.$id);
-    setForm(item);
+    const resolvedImage = item.image || (item as any).imageUrl || "";
+    setForm({
+      ...item,
+      image: resolvedImage,
+    });
     setShowForm(true);
   };
 
