@@ -1,8 +1,7 @@
 {
   "/minimart/page": "app/minimart/page.js",
-  "/users/page": "app/users/page.js",
+  "/services/page": "app/services/page.js",
   "/activities/page": "app/activities/page.js",
-  "/rooms/page": "app/rooms/page.js",
-  "/orders/page": "app/orders/page.js",
+  "/attendance/page": "app/attendance/page.js",
   "/staffs/page": "app/staffs/page.js"
 }
