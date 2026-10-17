@@ -67,7 +67,7 @@ export default function MinimartPage() {
       const res = await clientBundle.databases.listDocuments(
         clientBundle.databaseId,
         "users",
-        [Query.equal("role", "support"), Query.equal("supportType", "seller")],
+        [Query.equal("role", "support")],
       );
       setSellers(res.documents);
     } catch (e: any) {
@@ -322,11 +322,19 @@ export default function MinimartPage() {
                 style={inputStyle}
               >
                 <option value="">No Seller (Kitchen)</option>
-                {sellers.map((seller: any) => (
-                  <option key={seller.$id} value={seller.$id}>
-                    {seller.displayName} (@{seller.username})
-                  </option>
-                ))}
+                {sellers.map((seller: any) => {
+                  const sellerLabel =
+                    seller.displayName ||
+                    seller.name ||
+                    seller.username ||
+                    seller.email ||
+                    "Support Staff";
+                  return (
+                    <option key={seller.$id} value={seller.$id}>
+                      {sellerLabel} {seller.username ? `(@${seller.username})` : ""}
+                    </option>
+                  );
+                })}
               </select>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -484,8 +492,10 @@ export default function MinimartPage() {
                     }}
                   >
                     Seller:{" "}
-                    {sellers.find((s: any) => s.$id === item.sellerId)
-                      ?.displayName || "Unknown"}
+                    {(() => {
+                      const s = sellers.find((seller: any) => seller.$id === item.sellerId);
+                      return s ? (s.displayName || s.name || s.username || "Assigned") : "Assigned Seller";
+                    })()}
                   </p>
                 )}
               </div>

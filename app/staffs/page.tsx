@@ -1041,7 +1041,7 @@ export default function StaffsPage() {
                   Staff ID Cards Preview ({previewMembers.length})
                 </h3>
                 <p style={{ margin: 0, fontSize: 13, color: "#666" }}>
-                  Features 2 QR Codes (Verification + Attendance) with Drag / Position controls.
+                  Features 2 QR Codes (Front: Attendance, Back: Verification) with Drag / Position controls.
                 </p>
               </div>
 
@@ -1111,8 +1111,8 @@ export default function StaffsPage() {
                       Size: {cardLayout.photoScale}%
                       <input
                         type="range"
-                        min="80"
-                        max="130"
+                        min="70"
+                        max="180"
                         value={cardLayout.photoScale}
                         onChange={(e) => setCardLayout({ ...cardLayout, photoScale: Number(e.target.value) })}
                         style={{ width: "100%" }}
@@ -1269,26 +1269,35 @@ export default function StaffsPage() {
                           </span>
                         </div>
 
-                        {/* Draggable/Positionable Photo Frame */}
+                        {/* Fixed Photo Frame with Inner Zoom/Pan */}
                         <div
                           style={{
-                            width: (96 * cardLayout.photoScale) / 100,
-                            height: (108 * cardLayout.photoScale) / 100,
+                            width: 94,
+                            height: 106,
                             background: "#fff",
                             border: "3px solid #ff7f50",
                             borderRadius: 12,
                             overflow: "hidden",
                             marginBottom: 4,
                             boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                            transform: `translate(${cardLayout.photoX}px, ${cardLayout.photoY}px)`,
-                            transition: "transform 0.1s ease",
+                            position: "relative",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
                           }}
                         >
                           {member.photoUrl ? (
                             <img
                               src={member.photoUrl}
                               alt="Staff"
-                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                                transform: `translate(${cardLayout.photoX}px, ${cardLayout.photoY}px) scale(${cardLayout.photoScale / 100})`,
+                                transformOrigin: "center center",
+                                transition: "transform 0.1s ease",
+                              }}
                             />
                           ) : (
                             <div style={{ width: "100%", height: "100%", background: "#eee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36 }}>
@@ -1328,6 +1337,30 @@ export default function StaffsPage() {
                           <div style={{ fontSize: 8, color: "#cf1322", fontWeight: 800 }}>
                             PHONE: <span style={{ color: "#1a365d" }}>{member.phone || "N/A"}</span>
                           </div>
+
+                          {/* Attendance QR Code (Front, below phone, unlabeled) */}
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "center",
+                              alignItems: "center",
+                              marginTop: 4,
+                            }}
+                          >
+                            <img
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(attendanceUrl)}`}
+                              alt="Attendance QR"
+                              style={{
+                                width: 46,
+                                height: 46,
+                                borderRadius: 4,
+                                background: "#fff",
+                                border: "1px solid #CBD5E1",
+                                padding: 2,
+                                display: "block",
+                              }}
+                            />
+                          </div>
                         </div>
 
                         {/* Draggable / Positionable Signature */}
@@ -1345,14 +1378,14 @@ export default function StaffsPage() {
                               src={member.signatureUrl}
                               alt="Signature"
                               style={{
-                                height: (22 * cardLayout.signatureScale) / 100,
+                                height: (20 * cardLayout.signatureScale) / 100,
                                 objectFit: "contain",
                                 display: "block",
                                 margin: "0 auto",
                               }}
                             />
                           ) : (
-                            <div style={{ height: 16 }}></div>
+                            <div style={{ height: 14 }}></div>
                           )}
                           <div style={{ width: 100, borderBottom: "1px solid #1a365d", margin: "0 auto" }}></div>
                           <span style={{ fontSize: 7, fontWeight: 700, color: "#1a365d" }}>Cardholder Signature</span>
@@ -1367,7 +1400,7 @@ export default function StaffsPage() {
                       </div>
                     </div>
 
-                    {/* BACK OF ID CARD (DUAL QR CODES) */}
+                    {/* BACK OF ID CARD (SINGLE VERIFY QR CODE) */}
                     <div style={idCardStyle}>
                       <div
                         style={{
@@ -1390,44 +1423,27 @@ export default function StaffsPage() {
                           </h4>
                         </div>
 
-                        {/* DUAL QR CODES SECTION */}
+                        {/* SINGLE VERIFICATION QR CODE (UNLABELED) */}
                         <div
                           style={{
-                            display: "grid",
-                            gridTemplateColumns: "1fr 1fr",
-                            gap: 8,
-                            margin: "10px 0",
-                            background: "#F8FAFC",
-                            padding: 8,
-                            borderRadius: 8,
-                            border: "1px dashed #CBD5E1",
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            margin: "12px 0",
                           }}
                         >
-                          {/* QR CODE 1: STAFF VERIFICATION */}
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                            <div style={{ fontSize: 7, fontWeight: 800, color: "#059669", marginBottom: 4 }}>
-                              1. VERIFY STAFF
-                            </div>
-                            <img
-                              src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(verifyUrl)}`}
-                              alt="Staff Verification QR"
-                              style={{ width: 68, height: 68, border: "1px solid #059669", borderRadius: 4, background: "#fff" }}
-                            />
-                            <span style={{ fontSize: 6, color: "#555", marginTop: 3 }}>Public Verify</span>
-                          </div>
-
-                          {/* QR CODE 2: ATTENDANCE SCANNER */}
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                            <div style={{ fontSize: 7, fontWeight: 800, color: "#2563EB", marginBottom: 4 }}>
-                              2. ATTENDANCE
-                            </div>
-                            <img
-                              src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(attendanceUrl)}`}
-                              alt="Attendance QR"
-                              style={{ width: 68, height: 68, border: "1px solid #2563EB", borderRadius: 4, background: "#fff" }}
-                            />
-                            <span style={{ fontSize: 6, color: "#555", marginTop: 3 }}>Clock In / Out</span>
-                          </div>
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(verifyUrl)}`}
+                            alt="Staff Verification QR"
+                            style={{
+                              width: 84,
+                              height: 84,
+                              border: "1px solid #CBD5E1",
+                              borderRadius: 6,
+                              background: "#fff",
+                              padding: 4,
+                            }}
+                          />
                         </div>
 
                         {/* Security notice & authorized signature */}
