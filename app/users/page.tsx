@@ -3,6 +3,7 @@
 import { ID, Query, type Models } from "../../lib/appwrite";
 import { useEffect, useMemo, useState } from "react";
 import { getClients } from "../../lib/appwrite";
+import LoaderButton from "../../components/LoaderButton";
 
 type User = {
   $id: string;
@@ -54,6 +55,9 @@ const smallButtonStyle: React.CSSProperties = {
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [savingUser, setSavingUser] = useState(false);
+  const [creatingUser, setCreatingUser] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -111,7 +115,7 @@ export default function UsersPage() {
 
   const handleSave = async () => {
     if (!clientBundle || !editingUser) return;
-    setLoading(true);
+    setSavingUser(true);
     setError(null);
     try {
       await clientBundle.databases.updateDocument(
@@ -127,10 +131,12 @@ export default function UsersPage() {
       setEditingUser(null);
       setForm({});
       await fetchUsers();
+      setSuccess("User updated successfully!");
+      setTimeout(() => setSuccess(null), 4000);
     } catch (e: any) {
       setError(e.message);
     } finally {
-      setLoading(false);
+      setSavingUser(false);
     }
   };
 
@@ -152,7 +158,7 @@ export default function UsersPage() {
       setError("Password must be at least 8 characters long");
       return;
     }
-    setLoading(true);
+    setCreatingUser(true);
     setError(null);
     try {
       const response = await fetch("/api/users/create", {
@@ -195,7 +201,7 @@ export default function UsersPage() {
     } catch (e: any) {
       setError(e.message || "Failed to create user");
     } finally {
-      setLoading(false);
+      setCreatingUser(false);
     }
   };
 
@@ -362,13 +368,13 @@ export default function UsersPage() {
               </select>
             )}
             <div style={{ display: "flex", gap: 8 }}>
-              <button
+              <LoaderButton
                 onClick={handleCreate}
-                disabled={loading}
-                style={buttonStyle}
+                loading={creatingUser}
+                variant="primary"
               >
-                {loading ? "Creating..." : "Create User"}
-              </button>
+                {creatingUser ? "Creating User..." : "Create User"}
+              </LoaderButton>
               <button
                 onClick={() => {
                   setShowCreateForm(false);
@@ -437,13 +443,13 @@ export default function UsersPage() {
               </select>
             )}
             <div style={{ display: "flex", gap: 8 }}>
-              <button
+              <LoaderButton
                 onClick={handleSave}
-                disabled={loading}
-                style={buttonStyle}
+                loading={savingUser}
+                variant="primary"
               >
-                {loading ? "Saving..." : "Save Changes"}
-              </button>
+                {savingUser ? "Saving Changes..." : "Save Changes"}
+              </LoaderButton>
               <button
                 onClick={() => {
                   setEditingUser(null);
@@ -524,14 +530,17 @@ export default function UsersPage() {
                 </div>
                 <div style={{ color: "#999", fontSize: 12 }}>{user.email}</div>
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <button
                   onClick={() => handleEdit(user)}
                   style={smallButtonStyle}
                 >
                   Edit
                 </button>
-                <button
+                <LoaderButton
+                  variant="danger"
+                  size="sm"
+                  loading={deletingId === user.$id}
                   onClick={async () => {
                     if (
                       !confirm(
@@ -539,7 +548,7 @@ export default function UsersPage() {
                       )
                     )
                       return;
-                    setLoading(true);
+                    setDeletingId(user.$id);
                     try {
                       await clientBundle.databases.deleteDocument(
                         clientBundle.databaseId,
@@ -547,20 +556,17 @@ export default function UsersPage() {
                         user.$id,
                       );
                       await fetchUsers();
+                      setSuccess(`User ${user.displayName} deleted successfully.`);
+                      setTimeout(() => setSuccess(null), 4000);
                     } catch (e: any) {
                       setError(e.message);
                     } finally {
-                      setLoading(false);
+                      setDeletingId(null);
                     }
                   }}
-                  style={{
-                    ...smallButtonStyle,
-                    background: "#fee2e2",
-                    color: "#EF4444",
-                  }}
                 >
-                  Delete
-                </button>
+                  {deletingId === user.$id ? "Deleting..." : "Delete"}
+                </LoaderButton>
               </div>
             </div>
           ))}

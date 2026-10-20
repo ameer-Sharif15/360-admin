@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { getClients, ID, Query, type Models } from "../../lib/appwrite";
+import LoaderButton from "../../components/LoaderButton";
 
 type Seller = {
   $id: string;
@@ -51,6 +52,9 @@ const smallButtonStyle: React.CSSProperties = {
 export default function SellersPage() {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [editingSeller, setEditingSeller] = useState<Seller | null>(null);
@@ -111,7 +115,7 @@ export default function SellersPage() {
 
   const handleSave = async () => {
     if (!clientBundle || !editingSeller) return;
-    setLoading(true);
+    setSaving(true);
     setError(null);
     try {
       await clientBundle.databases.updateDocument(
@@ -129,7 +133,7 @@ export default function SellersPage() {
     } catch (e: any) {
       setError(e.message);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -147,7 +151,7 @@ export default function SellersPage() {
       setError("Password must be at least 8 characters long");
       return;
     }
-    setLoading(true);
+    setCreating(true);
     setError(null);
     try {
       const response = await fetch("/api/users/create", {
@@ -190,7 +194,26 @@ export default function SellersPage() {
     } catch (e: any) {
       setError(e.message || "Failed to create seller");
     } finally {
-      setLoading(false);
+      setCreating(false);
+    }
+  };
+
+  const handleDelete = async (seller: Seller) => {
+    if (!confirm(`Are you sure you want to delete ${seller.displayName}?`)) return;
+    if (!clientBundle) return;
+    setDeletingId(seller.$id);
+    setError(null);
+    try {
+      await clientBundle.databases.deleteDocument(
+        clientBundle.databaseId,
+        COLLECTION,
+        seller.$id,
+      );
+      await fetchSellers();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -304,14 +327,14 @@ export default function SellersPage() {
               }
               style={inputStyle}
             />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <LoaderButton
                 onClick={handleCreate}
-                disabled={loading}
-                style={buttonStyle}
+                loading={creating}
+                variant="primary"
               >
-                {loading ? "Creating..." : "Create Seller"}
-              </button>
+                {creating ? "Creating..." : "Create Seller"}
+              </LoaderButton>
               <button
                 onClick={() => {
                   setShowCreateForm(false);
@@ -356,14 +379,14 @@ export default function SellersPage() {
               }
               style={inputStyle}
             />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <LoaderButton
                 onClick={handleSave}
-                disabled={loading}
-                style={buttonStyle}
+                loading={saving}
+                variant="primary"
               >
-                {loading ? "Saving..." : "Save Changes"}
-              </button>
+                {saving ? "Saving..." : "Save Changes"}
+              </LoaderButton>
               <button
                 onClick={() => {
                   setEditingSeller(null);
@@ -397,6 +420,8 @@ export default function SellersPage() {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
+                flexWrap: "wrap",
+                gap: 12,
                 padding: 12,
                 borderRadius: 10,
                 border: "1px solid #eee",
@@ -408,6 +433,7 @@ export default function SellersPage() {
                     display: "flex",
                     gap: 8,
                     alignItems: "center",
+                    flexWrap: "wrap",
                     marginBottom: 4,
                   }}
                 >
@@ -446,43 +472,21 @@ export default function SellersPage() {
                   {seller.email}
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <button
                   onClick={() => handleEdit(seller)}
                   style={smallButtonStyle}
                 >
                   Edit
                 </button>
-                <button
-                  onClick={async () => {
-                    if (
-                      !confirm(
-                        `Are you sure you want to delete ${seller.displayName}?`,
-                      )
-                    )
-                      return;
-                    setLoading(true);
-                    try {
-                      await clientBundle.databases.deleteDocument(
-                        clientBundle.databaseId,
-                        COLLECTION,
-                        seller.$id,
-                      );
-                      await fetchSellers();
-                    } catch (e: any) {
-                      setError(e.message);
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                  style={{
-                    ...smallButtonStyle,
-                    background: "#fee2e2",
-                    color: "#EF4444",
-                  }}
+                <LoaderButton
+                  variant="danger"
+                  size="sm"
+                  loading={deletingId === seller.$id}
+                  onClick={() => handleDelete(seller)}
                 >
-                  Delete
-                </button>
+                  {deletingId === seller.$id ? "Deleting..." : "Delete"}
+                </LoaderButton>
               </div>
             </div>
           ))}

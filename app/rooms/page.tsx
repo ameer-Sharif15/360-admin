@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getClients, ID, type Models } from "../../lib/appwrite";
 import { uploadToCloudinary } from "../../lib/cloudinary";
+import LoaderButton from "../../components/LoaderButton";
 
 type Room = {
   $id: string;
@@ -22,6 +23,8 @@ const COLLECTION = "rooms";
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<Room>>({
@@ -149,7 +152,7 @@ export default function RoomsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this room?")) return;
     if (!clientBundle) return;
-    setLoading(true);
+    setDeletingId(id);
     setError(null);
     try {
       await clientBundle.databases.deleteDocument(
@@ -161,7 +164,7 @@ export default function RoomsPage() {
     } catch (e: any) {
       setError(e.message);
     } finally {
-      setLoading(false);
+      setDeletingId(null);
     }
   };
 
@@ -350,10 +353,10 @@ export default function RoomsPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
-          <button onClick={handleSubmit} disabled={loading} style={buttonStyle}>
-            {loading ? "Saving..." : editingId ? "Update Room" : "Save Room"}
-          </button>
+        <div style={{ display: "flex", gap: 12, marginTop: 24, alignItems: "center" }}>
+          <LoaderButton onClick={handleSubmit} loading={submitting} variant="primary">
+            {submitting ? "Saving..." : editingId ? "Update Room" : "Save Room"}
+          </LoaderButton>
           {editingId && (
             <button
               onClick={resetForm}
@@ -442,20 +445,18 @@ export default function RoomsPage() {
                 </div>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+            <div style={{ display: "flex", gap: 8, marginTop: 16, alignItems: "center" }}>
               <button onClick={() => handleEdit(room)} style={smallButtonStyle}>
                 Edit
               </button>
-              <button
+              <LoaderButton
+                variant="danger"
+                size="sm"
+                loading={deletingId === room.$id}
                 onClick={() => handleDelete(room.$id)}
-                style={{
-                  ...smallButtonStyle,
-                  background: "#fee2e2",
-                  color: "#EF4444",
-                }}
               >
-                Delete
-              </button>
+                {deletingId === room.$id ? "Deleting..." : "Delete"}
+              </LoaderButton>
             </div>
           </div>
         ))}
