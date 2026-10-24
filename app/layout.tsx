@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from '../lib/auth-context';
+import { API_BASE_URL, apiRequest } from '../lib/api';
+import { io } from 'socket.io-client';
 import './globals.css';
 import {
   LayoutDashboard,
@@ -20,12 +22,16 @@ import {
   LogOut,
   Menu,
   X,
+  MessageSquare,
+  Dumbbell,
 } from 'lucide-react';
 
 const navLinks = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Users', href: '/users', icon: Users },
   { name: 'Staffs', href: '/staffs', icon: IdCard },
+  { name: 'Gym', href: '/gym', icon: Dumbbell },
+  { name: 'Communication', href: '/communication', icon: MessageSquare },
   { name: 'Sellers', href: '/sellers', icon: ShoppingBag },
   { name: 'Attendance', href: '/attendance', icon: CalendarCheck },
   { name: 'Orders', href: '/orders', icon: Package },
@@ -41,12 +47,88 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, loading, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [unreadCommCount, setUnreadCommCount] = useState(0);
 
   useEffect(() => {
     if (!loading && !user && pathname !== '/login') {
       router.push('/login');
     }
   }, [user, loading, pathname, router]);
+
+  // Fallback watchdog: If loading ever takes longer than 5 seconds, auto-redirect to /login
+  useEffect(() => {
+    if (pathname === '/login') return;
+    const timer = setTimeout(() => {
+      if (loading) {
+        router.push('/login');
+      }
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [loading, pathname, router]);
+
+  // Real-time unread messages count sync for Communication tab
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchUnreadCount = async () => {
+      try {
+        const contacts = await apiRequest('/api/chats/it-contacts');
+        if (Array.isArray(contacts)) {
+          const total = contacts.reduce((sum: number, c: any) => sum + (Number(c.unreadCount) || 0), 0);
+          setUnreadCommCount(total);
+          return;
+        }
+      } catch (_) {}
+
+      try {
+        const res = await apiRequest('/api/chats/unread-count');
+        if (res && typeof res.unreadCount === 'number') {
+          setUnreadCommCount(res.unreadCount);
+        }
+      } catch (_) {}
+    };
+
+    fetchUnreadCount();
+
+    // Listen to custom event dispatched by communication page
+    const handleCustomUnread = (e: any) => {
+      if (typeof e.detail === 'number') {
+        setUnreadCommCount(e.detail);
+      } else {
+        fetchUnreadCount();
+      }
+    };
+    window.addEventListener('it_unread_count_updated', handleCustomUnread);
+
+    // Socket.io for live updates
+    let socket: any = null;
+    try {
+      socket = io(API_BASE_URL, { transports: ['websocket', 'polling'] });
+      socket.on('connect', () => {
+        socket.emit('join_channel', 'admin_channel');
+        socket.emit('join_channel', 'support_channel');
+        const uid = (user as any)._id || (user as any).id;
+        if (uid) socket.emit('join_user', uid);
+      });
+
+      const handleIncoming = () => {
+        fetchUnreadCount();
+      };
+
+      socket.on('new_message', handleIncoming);
+      socket.on('message_received', handleIncoming);
+      socket.on('chat_updated', handleIncoming);
+      socket.on('it_announcement', handleIncoming);
+    } catch (_) {}
+
+    const interval = setInterval(fetchUnreadCount, 30000);
+
+    return () => {
+      window.removeEventListener('it_unread_count_updated', handleCustomUnread);
+      clearInterval(interval);
+      if (socket) socket.disconnect();
+    };
+  }, [user]);
 
   // Close mobile drawer on route change
   useEffect(() => {
@@ -121,6 +203,28 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {unreadCommCount > 0 && (
+            <Link
+              href="/communication"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                background: '#EF4444',
+                color: '#fff',
+                padding: '4px 9px',
+                borderRadius: 999,
+                fontSize: 11.5,
+                fontWeight: 800,
+                textDecoration: 'none',
+                boxShadow: '0 2px 8px rgba(239, 68, 68, 0.45)',
+              }}
+              title={`${unreadCommCount} unread communication message${unreadCommCount === 1 ? '' : 's'}`}
+            >
+              <MessageSquare size={12} />
+              <span>{unreadCommCount > 99 ? '99+' : unreadCommCount}</span>
+            </Link>
+          )}
           <span className="admin-active-badge">
             {ActiveIcon && <ActiveIcon size={13} style={{ marginRight: 4 }} />}
             {activeLink?.name || 'Admin'}
@@ -214,6 +318,24 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
               >
                 <Icon size={18} color={isActive ? '#fff' : '#94A3B8'} />
                 <span style={{ flex: 1 }}>{link.name}</span>
+                {link.href === '/communication' && unreadCommCount > 0 && (
+                  <span
+                    style={{
+                      background: isActive ? '#FFFFFF' : '#EF4444',
+                      color: isActive ? '#EF4444' : '#FFFFFF',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      padding: '2px 7px',
+                      borderRadius: 999,
+                      minWidth: 20,
+                      textAlign: 'center',
+                      lineHeight: '16px',
+                      boxShadow: '0 2px 6px rgba(239, 68, 68, 0.4)',
+                    }}
+                  >
+                    {unreadCommCount > 99 ? '99+' : unreadCommCount}
+                  </span>
+                )}
                 {isActive && (
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />
                 )}

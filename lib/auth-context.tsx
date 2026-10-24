@@ -33,9 +33,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const checkAuth = async () => {
     try {
+      if (typeof window !== "undefined" && !localStorage.getItem("admin_jwt")) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
       const { account } = getClients();
-      const currentUser = await account.get();
-      setUser(currentUser);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Auth verification timeout")), 6000)
+      );
+      const currentUser = await Promise.race([account.get(), timeoutPromise]);
+      setUser(currentUser as AdminUser);
     } catch (error) {
       setUser(null);
     } finally {

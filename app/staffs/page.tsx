@@ -3,11 +3,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getClients, ID, Query, type Models } from "../../lib/appwrite";
 import { uploadToCloudinary } from "../../lib/cloudinary";
-import { API_BASE_URL } from "../../lib/api";
+import { API_BASE_URL, apiRequest } from "../../lib/api";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { drawLetterhead, stampDocumentFooter } from "../../lib/pdfLetterhead";
 import {
+  Search,
   IdCard,
   FileDown,
   Download,
@@ -27,6 +28,18 @@ import {
   Sliders,
   Eye,
   FileText,
+  Calendar,
+  Save,
+  History,
+  TrendingDown,
+  RefreshCw,
+  QrCode,
+  ShieldCheck,
+  Building,
+  Phone,
+  Layers,
+  ChevronRight,
+  ExternalLink,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -69,8 +82,46 @@ export type StaffMember = {
   documents?: StaffDocument[];
 };
 
+export type MonthlyPayrollRecord = {
+  _id?: string;
+  staffId: string;
+  month: string;
+  staffName: string;
+  department?: string;
+  position?: string;
+  employeeId?: string;
+  bankName?: string;
+  accountNumber?: string;
+  accountName?: string;
+  basicSalary: number;
+  allowances: number;
+  deductions: number;
+  deductionReason?: string;
+  netSalary: number;
+  status: "pending" | "approved" | "paid";
+  paidAt?: string;
+  notes?: string;
+};
+
 const COLLECTION_KEY = "STAFF_MEMBERS";
 const DIRECTOR_SIG_KEY = "360_director_signature_url";
+
+const MONTHS_LIST = [
+  { value: "01", name: "January" },
+  { value: "02", name: "February" },
+  { value: "03", name: "March" },
+  { value: "04", name: "April" },
+  { value: "05", name: "May" },
+  { value: "06", name: "June" },
+  { value: "07", name: "July" },
+  { value: "08", name: "August" },
+  { value: "09", name: "September" },
+  { value: "10", name: "October" },
+  { value: "11", name: "November" },
+  { value: "12", name: "December" },
+];
+
+const YEARS_LIST = ["2024", "2025", "2026", "2027", "2028", "2029", "2030"];
 
 // ─── Spinner ─────────────────────────────────────────────────────────────────
 function Spinner({ size = 14, color = "#fff" }: { size?: number; color?: string }) {
@@ -154,6 +205,30 @@ export default function StaffsPage() {
   const [downloadingCsv, setDownloadingCsv] = useState(false);
   const [downloadingPayrollPdf, setDownloadingPayrollPdf] = useState(false);
 
+  // Monthly Salary System
+  const today = new Date();
+  const [selectedYear, setSelectedYear] = useState<string>(String(today.getFullYear()));
+  const [selectedMonth, setSelectedMonth] = useState<string>(String(today.getMonth() + 1).padStart(2, "0"));
+  const [salarySubTab, setSalarySubTab] = useState<"schedule" | "history">("schedule");
+  const [monthlyRecords, setMonthlyRecords] = useState<MonthlyPayrollRecord[]>([]);
+  const [payrollHistory, setPayrollHistory] = useState<any[]>([]);
+  const [loadingMonthlyPayroll, setLoadingMonthlyPayroll] = useState(false);
+  const [savingMonthlyPayroll, setSavingMonthlyPayroll] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Monthly Record & Deduction Edit Modal
+  const [editingMonthRecord, setEditingMonthRecord] = useState<MonthlyPayrollRecord | null>(null);
+  const [editMonthBasic, setEditMonthBasic] = useState<number>(0);
+  const [editMonthAllowances, setEditMonthAllowances] = useState<number>(0);
+  const [editMonthDeduction, setEditMonthDeduction] = useState<number>(0);
+  const [editMonthDeductionReason, setEditMonthDeductionReason] = useState<string>("");
+  const [editMonthBankName, setEditMonthBankName] = useState<string>("");
+  const [editMonthAccountNumber, setEditMonthAccountNumber] = useState<string>("");
+  const [editMonthAccountName, setEditMonthAccountName] = useState<string>("");
+  const [editMonthStatus, setEditMonthStatus] = useState<"pending" | "approved" | "paid">("pending");
+  const [savingMonthRecord, setSavingMonthRecord] = useState(false);
+  const [monthSearchFilter, setMonthSearchFilter] = useState<string>("");
+
   const cardRefs = useRef<{ [id: string]: { front: HTMLDivElement | null; back: HTMLDivElement | null } }>({});
 
   const [cardLayout, setCardLayout] = useState({
@@ -188,6 +263,7 @@ export default function StaffsPage() {
         [Query.orderDesc("$createdAt")]
       );
       setStaff(res.documents);
+      fetchMonthlyPayroll(selectedYear, selectedMonth, res.documents);
       if (selectedStaffForDocs) {
         const updated = res.documents.find((s) => s.$id === selectedStaffForDocs.$id);
         if (updated) setSelectedStaffForDocs(updated);
@@ -197,6 +273,116 @@ export default function StaffsPage() {
   };
 
   useEffect(() => { fetchStaff(); }, [clientBundle]);
+
+  // ─── Fetch Monthly Payroll Records (Merged with Staff Roster) ─────────────
+  const fetchMonthlyPayroll = async (year = selectedYear, month = selectedMonth, currentStaff = staff) => {
+    const monthKey = `${year}-${month}`;
+    setLoadingMonthlyPayroll(true);
+    try {
+      const res = await apiRequest(`/api/payroll?month=${monthKey}`);
+      const savedList: MonthlyPayrollRecord[] = (res && Array.isArray(res.records)) ? res.records : [];
+      const savedMap = new Map<string, MonthlyPayrollRecord>();
+      savedList.forEach((r) => {
+        if (r.staffId) savedMap.set(String(r.staffId), r);
+      });
+
+      // Target staff roster: currentStaff or state staff
+      const roster = currentStaff.length > 0 ? currentStaff : staff;
+
+      // Merge saved overrides with active staff roster
+      const combined: MonthlyPayrollRecord[] = roster.map((s) => {
+        const saved = savedMap.get(String(s.$id));
+        if (saved) {
+          return {
+            ...saved,
+            staffName: saved.staffName || s.name,
+            department: saved.department || s.department,
+            position: saved.position || s.position,
+            employeeId: saved.employeeId || s.employeeId,
+            bankName: saved.bankName || s.bankName,
+            accountNumber: saved.accountNumber || s.accountNumber,
+            accountName: saved.accountName || s.accountName || s.name,
+          };
+        }
+        // Staff member hasn't been individually modified for this month: seed base pay & bank info
+        const basic = Number(s.basicSalary) || 0;
+        const allow = Number(s.allowances) || 0;
+        const deduct = 0;
+        return {
+          staffId: s.$id,
+          month: monthKey,
+          staffName: s.name,
+          department: s.department,
+          position: s.position,
+          employeeId: s.employeeId,
+          bankName: s.bankName,
+          accountNumber: s.accountNumber,
+          accountName: s.accountName || s.name,
+          basicSalary: basic,
+          allowances: allow,
+          deductions: deduct,
+          deductionReason: "",
+          netSalary: Math.max(0, basic + allow - deduct),
+          status: "pending",
+        };
+      });
+
+      // Append any historical saved records in MongoDB that might not currently be active in Appwrite
+      savedList.forEach((r) => {
+        if (!combined.some((c) => String(c.staffId) === String(r.staffId))) {
+          combined.push(r);
+        }
+      });
+
+      setMonthlyRecords(combined);
+    } catch (err: any) {
+      console.warn("Payroll fetch notice:", err.message);
+      const roster = currentStaff.length > 0 ? currentStaff : staff;
+      const defaultRecords: MonthlyPayrollRecord[] = roster.map((s) => ({
+        staffId: s.$id,
+        month: monthKey,
+        staffName: s.name,
+        department: s.department,
+        position: s.position,
+        employeeId: s.employeeId,
+        bankName: s.bankName,
+        accountNumber: s.accountNumber,
+        accountName: s.accountName || s.name,
+        basicSalary: Number(s.basicSalary) || 0,
+        allowances: Number(s.allowances) || 0,
+        deductions: 0,
+        deductionReason: "",
+        netSalary: Math.max(0, (Number(s.basicSalary) || 0) + (Number(s.allowances) || 0)),
+        status: "pending",
+      }));
+      setMonthlyRecords(defaultRecords);
+    } finally {
+      setLoadingMonthlyPayroll(false);
+    }
+  };
+
+  // Fetch history archive
+  const fetchPayrollHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const res = await apiRequest("/api/payroll/history");
+      if (Array.isArray(res)) {
+        setPayrollHistory(res);
+      }
+    } catch (err: any) {
+      console.warn("Payroll history notice:", err.message);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  // Trigger monthly fetch when month/year changes or when activeTab switches to salary
+  useEffect(() => {
+    if (activeTab === "salary") {
+      fetchMonthlyPayroll(selectedYear, selectedMonth);
+      fetchPayrollHistory();
+    }
+  }, [activeTab, selectedYear, selectedMonth, staff.length]);
 
   const handleSalaryChange = (field: "basicSalary" | "allowances" | "deductions", val: number) => {
     const updated = { ...form, [field]: val };
@@ -245,6 +431,8 @@ export default function StaffsPage() {
       setForm({ active: true, basicSalary: 0, allowances: 0, deductions: 0, netSalary: 0 });
       setImageFile(null); setSignatureFile(null);
       await fetchStaff();
+      // Also refresh month schedule
+      fetchMonthlyPayroll();
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   };
@@ -318,7 +506,7 @@ export default function StaffsPage() {
     setSuccessMsg("Director signature removed.");
   };
 
-  // PDF - single card
+  // ─── PDF: Single Card (CR80 Portrait 54mm × 85.6mm) ────────────────────────
   const downloadCardAsPdf = async (member: StaffMember) => {
     const refs = cardRefs.current[member.$id];
     if (!refs?.front || !refs?.back) { alert("Card not rendered yet."); return; }
@@ -331,73 +519,206 @@ export default function StaffsPage() {
         html2canvas(refs.front, { scale: 3, useCORS: true, allowTaint: true }),
         html2canvas(refs.back, { scale: 3, useCORS: true, allowTaint: true }),
       ]);
-      const W = 85.6; const H = 54;
-      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: [W * 2 + 12, H + 20] });
-      pdf.addImage(fc.toDataURL("image/png"), "PNG", 5, 5, W, H);
-      pdf.addImage(bc.toDataURL("image/png"), "PNG", W + 12, 5, W, H);
-      pdf.setFontSize(6); pdf.setTextColor(120);
-      pdf.text("FRONT", 5 + W / 2, H + 12, { align: "center" });
-      pdf.text("BACK", W + 12 + W / 2, H + 12, { align: "center" });
-      pdf.setFontSize(5); pdf.setTextColor(140);
-      pdf.text(`Official Document · Generated by IT Department · 360 Degree Global Estate Ltd. · ${new Date().toLocaleDateString("en-GB")}`, W * 2 + 7, H + 17, { align: "right" });
+      // Standard CR80 badge dimensions in millimeters
+      const W = 54;
+      const H = 85.6;
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: [W * 2 + 20, H + 26],
+      });
+      // Side-by-side: Front on left, Back on right
+      pdf.addImage(fc.toDataURL("image/png"), "PNG", 7, 7, W, H);
+      pdf.addImage(bc.toDataURL("image/png"), "PNG", W + 13, 7, W, H);
+
+      pdf.setFontSize(6.5); pdf.setTextColor(100);
+      pdf.text("FRONT (54 × 85.6 mm)", 7 + W / 2, H + 13, { align: "center" });
+      pdf.text("BACK (54 × 85.6 mm)", W + 13 + W / 2, H + 13, { align: "center" });
+
+      pdf.setFontSize(5.5); pdf.setTextColor(140);
+      pdf.text(
+        `Official CR80 Identity Card · Generated by IT Department · 360 Degree Global Estate Ltd. · ${new Date().toLocaleDateString("en-GB")}`,
+        W * 2 + 13,
+        H + 19,
+        { align: "right" }
+      );
       pdf.save(`ID_${member.name.replace(/\s+/g, "_")}_${member.employeeId || member.$id.slice(0, 6)}.pdf`);
     } catch (err: any) { setError("PDF failed: " + err.message); }
     finally { setDownloadingIds((prev) => { const n = new Set(prev); n.delete(member.$id); return n; }); }
   };
 
-  // PDF - all cards
+  // ─── PDF: All Cards (CR80 Portrait 54mm × 85.6mm per page) ───────────────────
   const downloadAllAsPdf = async () => {
     setDownloadingPdf(true);
     try {
       const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
         import("jspdf"), import("html2canvas"),
       ]);
-      const W = 85.6; const H = 54;
-      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: [W * 2 + 12, H + 20] });
+      const W = 54;
+      const H = 85.6;
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: [W * 2 + 20, H + 26],
+      });
       for (let i = 0; i < previewMembers.length; i++) {
         const m = previewMembers[i];
         const refs = cardRefs.current[m.$id];
         if (!refs?.front || !refs?.back) continue;
-        if (i > 0) pdf.addPage();
+        if (i > 0) pdf.addPage([W * 2 + 20, H + 26], "landscape");
         const [fc, bc] = await Promise.all([
           html2canvas(refs.front, { scale: 3, useCORS: true, allowTaint: true }),
           html2canvas(refs.back, { scale: 3, useCORS: true, allowTaint: true }),
         ]);
-        pdf.addImage(fc.toDataURL("image/png"), "PNG", 5, 5, W, H);
-        pdf.addImage(bc.toDataURL("image/png"), "PNG", W + 12, 5, W, H);
-        pdf.setFontSize(6); pdf.setTextColor(120);
-        pdf.text("FRONT", 5 + W / 2, H + 12, { align: "center" });
-        pdf.text("BACK", W + 12 + W / 2, H + 12, { align: "center" });
-        pdf.text(m.name, 5, H + 17, { align: "left" });
-        pdf.setFontSize(5); pdf.setTextColor(140);
-        pdf.text(`Official Document · Generated by IT Department · 360 Degree Global Estate Ltd. · ${new Date().toLocaleDateString("en-GB")}`, W * 2 + 7, H + 17, { align: "right" });
+        pdf.addImage(fc.toDataURL("image/png"), "PNG", 7, 7, W, H);
+        pdf.addImage(bc.toDataURL("image/png"), "PNG", W + 13, 7, W, H);
+
+        pdf.setFontSize(6.5); pdf.setTextColor(100);
+        pdf.text("FRONT (54 × 85.6 mm)", 7 + W / 2, H + 13, { align: "center" });
+        pdf.text("BACK (54 × 85.6 mm)", W + 13 + W / 2, H + 13, { align: "center" });
+
+        pdf.text(m.name, 7, H + 19, { align: "left" });
+        pdf.setFontSize(5.5); pdf.setTextColor(140);
+        pdf.text(
+          `Official Document · Generated by IT Department · 360 Degree Global Estate Ltd. · ${new Date().toLocaleDateString("en-GB")}`,
+          W * 2 + 13,
+          H + 19,
+          { align: "right" }
+        );
       }
       pdf.save(`360_ID_Cards_${new Date().toISOString().split("T")[0]}.pdf`);
     } catch (err: any) { setError("Batch PDF failed: " + err.message); }
     finally { setDownloadingPdf(false); }
   };
 
-  // Bank Payroll PDF (360 Degree Letterhead + IT Dept Sign + Complete Schedule)
+  // ─── Quick Month Selector Helper ───────────────────────────────────────────
+  const selectedMonthName = MONTHS_LIST.find((m) => m.value === selectedMonth)?.name || "Month";
+
+  // ─── Update Month Record Modal & Handlers ──────────────────────────────────
+  const handleOpenEditMonthModal = (record: MonthlyPayrollRecord) => {
+    setEditingMonthRecord(record);
+    setEditMonthBasic(Number(record.basicSalary) || 0);
+    setEditMonthAllowances(Number(record.allowances) || 0);
+    setEditMonthDeduction(Number(record.deductions) || 0);
+    setEditMonthDeductionReason(record.deductionReason || "");
+    setEditMonthBankName(record.bankName || "");
+    setEditMonthAccountNumber(record.accountNumber || "");
+    setEditMonthAccountName(record.accountName || record.staffName || "");
+    setEditMonthStatus(record.status || "pending");
+  };
+
+  const handleSaveMonthRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMonthRecord) return;
+    setSavingMonthRecord(true);
+    const monthKey = `${selectedYear}-${selectedMonth}`;
+    const basic = Number(editMonthBasic) || 0;
+    const allowances = Number(editMonthAllowances) || 0;
+    const deductions = Number(editMonthDeduction) || 0;
+    const netSalary = Math.max(0, basic + allowances - deductions);
+
+    const payload = {
+      staffId: editingMonthRecord.staffId,
+      month: monthKey,
+      staffName: editingMonthRecord.staffName,
+      department: editingMonthRecord.department,
+      position: editingMonthRecord.position,
+      employeeId: editingMonthRecord.employeeId,
+      bankName: editMonthBankName,
+      accountNumber: editMonthAccountNumber,
+      accountName: editMonthAccountName,
+      basicSalary: basic,
+      allowances: allowances,
+      deductions: deductions,
+      deductionReason: editMonthDeductionReason,
+      netSalary: netSalary,
+      status: editMonthStatus,
+    };
+
+    try {
+      await apiRequest("/api/payroll/staff", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      // Update in-memory state
+      setMonthlyRecords((prev) =>
+        prev.map((r) =>
+          String(r.staffId) === String(editingMonthRecord.staffId)
+            ? { ...r, ...payload }
+            : r
+        )
+      );
+
+      setSuccessMsg(`Successfully updated ${selectedMonthName} ${selectedYear} record for ${editingMonthRecord.staffName}!`);
+      setEditingMonthRecord(null);
+      fetchPayrollHistory();
+    } catch (err: any) {
+      setError("Failed to save month record: " + err.message);
+    } finally {
+      setSavingMonthRecord(false);
+    }
+  };
+
+  // ─── Bulk Save Current Month Schedule ──────────────────────────────────────
+  const handleBulkSaveMonthlyPayroll = async () => {
+    const monthKey = `${selectedYear}-${selectedMonth}`;
+    setSavingMonthlyPayroll(true);
+    try {
+      await apiRequest("/api/payroll/bulk", {
+        method: "POST",
+        body: JSON.stringify({
+          month: monthKey,
+          records: monthlyRecords,
+        }),
+      });
+      setSuccessMsg(`Monthly payroll schedule for ${selectedMonthName} ${selectedYear} saved & locked!`);
+      fetchPayrollHistory();
+    } catch (err: any) {
+      setError("Failed to save month schedule: " + err.message);
+    } finally {
+      setSavingMonthlyPayroll(false);
+    }
+  };
+
+  // ─── Bank Payroll PDF (Selected Month & Year) ──────────────────────────────
   const downloadPayrollPDF = async () => {
     setDownloadingPayrollPdf(true);
     try {
       const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-      const docRef = `360-PAYROLL-${new Date().toISOString().slice(0, 7).replace("-", "")}`;
+      const monthKey = `${selectedYear}-${selectedMonth}`;
+      const docRef = `360-PAYROLL-${selectedYear}${selectedMonth}`;
+
       const startY = await drawLetterhead(doc, {
-        title: "Staff Salary & Bank Payment Schedule",
-        subtitle: "Confidential Monthly Bank Credit Advice · 360 Degree Global Estate Ltd.",
+        title: `Staff Salary & Bank Payment Schedule - ${selectedMonthName} ${selectedYear}`,
+        subtitle: `Confidential Bank Credit Advice · Payment Period: ${selectedMonthName} ${selectedYear} · 360 Degree Global Estate Ltd.`,
         docRef,
         badge: "BANK ADVICE",
       });
 
-      // Compute aggregates
-      const totalBasic = staff.reduce((acc, s) => acc + (Number(s.basicSalary) || 0), 0);
-      const totalAllowances = staff.reduce((acc, s) => acc + (Number(s.allowances) || 0), 0);
-      const totalDeductions = staff.reduce((acc, s) => acc + (Number(s.deductions) || 0), 0);
-      const totalNet = staff.reduce((acc, s) => {
-        const net = s.netSalary !== undefined ? Number(s.netSalary) : (Number(s.basicSalary || 0) + Number(s.allowances || 0) - Number(s.deductions || 0));
-        return acc + net;
-      }, 0);
+      const currentRecords = monthlyRecords.length > 0 ? monthlyRecords : staff.map((s) => ({
+        staffId: s.$id,
+        month: monthKey,
+        staffName: s.name,
+        department: s.department,
+        position: s.position,
+        employeeId: s.employeeId,
+        bankName: s.bankName,
+        accountNumber: s.accountNumber,
+        accountName: s.accountName || s.name,
+        basicSalary: Number(s.basicSalary) || 0,
+        allowances: Number(s.allowances) || 0,
+        deductions: Number(s.deductions) || 0,
+        deductionReason: s.deductionReason || "",
+        netSalary: Number(s.netSalary) || (Number(s.basicSalary || 0) + Number(s.allowances || 0) - Number(s.deductions || 0)),
+        status: "pending" as const,
+      }));
+
+      // Compute aggregates for this month
+      const totalBasic = currentRecords.reduce((acc, r) => acc + (Number(r.basicSalary) || 0), 0);
+      const totalAllowances = currentRecords.reduce((acc, r) => acc + (Number(r.allowances) || 0), 0);
+      const totalDeductions = currentRecords.reduce((acc, r) => acc + (Number(r.deductions) || 0), 0);
+      const totalNet = currentRecords.reduce((acc, r) => acc + (Number(r.netSalary) || 0), 0);
 
       // Summary Metric Cards above table
       const pageWidth = doc.internal.pageSize.getWidth();
@@ -409,10 +730,10 @@ export default function StaffsPage() {
       const cardWidth = (availableWidth - cardSpacing * 4) / 5;
 
       const metrics = [
-        { label: "STAFF COUNT", val: `${staff.length} Persons`, color: [30, 41, 59] },
+        { label: "PERIOD & STAFF", val: `${selectedMonthName.toUpperCase()} · ${currentRecords.length} STAFF`, color: [30, 41, 59] },
         { label: "TOTAL BASIC", val: `₦${totalBasic.toLocaleString()}`, color: [30, 58, 138] },
-        { label: "TOTAL ALLOWANCE", val: `₦${totalAllowances.toLocaleString()}`, color: [16, 185, 129] },
-        { label: "TOTAL DEDUCTION", val: `-₦${totalDeductions.toLocaleString()}`, color: [220, 38, 38] },
+        { label: "TOTAL ALLOWANCES", val: `₦${totalAllowances.toLocaleString()}`, color: [16, 185, 129] },
+        { label: `${selectedMonthName.toUpperCase()} DEDUCTIONS`, val: `-₦${totalDeductions.toLocaleString()}`, color: [220, 38, 38] },
         { label: "NET BANK PAYOUT", val: `₦${totalNet.toLocaleString()}`, color: [255, 127, 80] },
       ];
 
@@ -444,27 +765,24 @@ export default function StaffsPage() {
         "Account Name",
         "Basic (₦)",
         "Allow. (₦)",
-        "Ded. (₦)",
-        "Ded. Reason",
-        "Net Salary (₦)",
+        `Ded. ${selectedMonthName.slice(0, 3)} (₦)`,
+        "Deduction Reason",
+        "Net Payout (₦)",
       ];
 
-      const tableRows = staff.map((s, idx) => {
-        const net = s.netSalary !== undefined ? Number(s.netSalary) : (Number(s.basicSalary || 0) + Number(s.allowances || 0) - Number(s.deductions || 0));
-        return [
-          String(idx + 1),
-          s.name || "N/A",
-          `${s.employeeId || s.$id.slice(0, 6)}\n${s.department || "General"}`,
-          s.bankName || "—",
-          s.accountNumber || "—",
-          s.accountName || s.name || "—",
-          (Number(s.basicSalary) || 0).toLocaleString(),
-          (Number(s.allowances) || 0).toLocaleString(),
-          (Number(s.deductions) || 0) > 0 ? `-${(Number(s.deductions) || 0).toLocaleString()}` : "0",
-          s.deductionReason || "—",
-          net.toLocaleString(),
-        ];
-      });
+      const tableRows = currentRecords.map((r, idx) => [
+        String(idx + 1),
+        r.staffName || "N/A",
+        `${r.employeeId || r.staffId.slice(0, 6)}\n${r.department || "General"}`,
+        r.bankName || "—",
+        r.accountNumber || "—",
+        r.accountName || r.staffName || "—",
+        (Number(r.basicSalary) || 0).toLocaleString(),
+        (Number(r.allowances) || 0).toLocaleString(),
+        (Number(r.deductions) || 0) > 0 ? `-${(Number(r.deductions) || 0).toLocaleString()}` : "0",
+        r.deductionReason || "—",
+        (Number(r.netSalary) || 0).toLocaleString(),
+      ]);
 
       const footRow = [
         "",
@@ -485,9 +803,9 @@ export default function StaffsPage() {
         body: tableRows,
         foot: [footRow],
         startY: cardY + cardHeight + 4,
-        margin: { left: 14, right: 14 },
+        margin: { left: 10, right: 10 },
         styles: {
-          fontSize: 7.5,
+          fontSize: 7,
           cellPadding: 2,
           overflow: "linebreak",
           valign: "middle",
@@ -503,20 +821,20 @@ export default function StaffsPage() {
           fillColor: [241, 245, 249],
           textColor: [26, 54, 93],
           fontStyle: "bold",
-          fontSize: 8,
+          fontSize: 7.5,
         },
         columnStyles: {
           0: { cellWidth: 8, halign: "center" },
           1: { cellWidth: 38, fontStyle: "bold" },
           2: { cellWidth: 28 },
-          3: { cellWidth: 24 },
-          4: { cellWidth: 26, fontStyle: "bold" },
-          5: { cellWidth: 34 },
-          6: { cellWidth: 20, halign: "right" },
+          3: { cellWidth: 26 },
+          4: { cellWidth: 28, fontStyle: "bold" },
+          5: { cellWidth: 35 },
+          6: { cellWidth: 22, halign: "right" },
           7: { cellWidth: 20, halign: "right" },
           8: { cellWidth: 20, halign: "right", textColor: [220, 38, 38] },
-          9: { cellWidth: 24, fontSize: 6.5 },
-          10: { cellWidth: 25, halign: "right", fontStyle: "bold", textColor: [26, 54, 93] },
+          9: { cellWidth: 26, fontSize: 6.5 },
+          10: { cellWidth: 26, halign: "right", fontStyle: "bold", textColor: [26, 54, 93] },
         },
         alternateRowStyles: { fillColor: [248, 250, 252] },
       });
@@ -560,11 +878,10 @@ export default function StaffsPage() {
         doc.text(item.dept, sx, finalY + 22);
       });
 
-      // Stamp IT department sign and page numbers on every page
-      stampDocumentFooter(doc, "Confidential Bank Payroll Transfer Document");
+      stampDocumentFooter(doc, `Confidential Bank Payroll Transfer Document · Month: ${selectedMonthName} ${selectedYear}`);
 
-      doc.save(`360_Bank_Payroll_Schedule_${new Date().toISOString().split("T")[0]}.pdf`);
-      setSuccessMsg("Bank payroll PDF generated and downloaded successfully!");
+      doc.save(`360_Bank_Payroll_${selectedYear}_${selectedMonth}_${selectedMonthName}.pdf`);
+      setSuccessMsg(`Bank payroll PDF for ${selectedMonthName} ${selectedYear} downloaded successfully!`);
     } catch (err: any) {
       setError("Payroll PDF failed: " + err.message);
     } finally {
@@ -572,11 +889,11 @@ export default function StaffsPage() {
     }
   };
 
-  // CSV (With IT Department Sign + Deduction Reason)
+  // ─── CSV Export (Selected Month & Year) ────────────────────────────────────
   const downloadPayrollCSV = async () => {
     setDownloadingCsv(true);
     try {
-      const itSign = `"# Official Document: Generated by IT Department · 360 Degree Global Estate Ltd. · ${new Date().toLocaleString("en-NG")}"`;
+      const itSign = `"# Official Document: Generated by IT Department · Monthly Bank Credit Schedule · ${selectedMonthName} ${selectedYear} · 360 Degree Global Estate Ltd."`;
       const headers = [
         "Staff Name",
         "Employee ID",
@@ -587,23 +904,43 @@ export default function StaffsPage() {
         "Account Name",
         "Basic Salary (NGN)",
         "Allowances (NGN)",
-        "Deductions (NGN)",
+        `Deductions ${selectedMonthName} (NGN)`,
         "Deduction Reason",
         "Net Salary (NGN)",
+        "Payment Status",
       ];
-      const rows = staff.map((s) => [
-        `"${s.name || ""}"`,
-        `"${s.employeeId || ""}"`,
-        `"${s.department || ""}"`,
-        `"${s.position || ""}"`,
-        `"${s.bankName || ""}"`,
-        `"${s.accountNumber ? `\t${s.accountNumber}` : ""}"`,
-        `"${s.accountName || s.name || ""}"`,
-        s.basicSalary || 0,
-        s.allowances || 0,
-        s.deductions || 0,
-        `"${(s.deductionReason || "").replace(/"/g, '""')}"`,
-        s.netSalary || (Number(s.basicSalary || 0) + Number(s.allowances || 0) - Number(s.deductions || 0)),
+      const currentRecords = monthlyRecords.length > 0 ? monthlyRecords : staff.map((s) => ({
+        staffId: s.$id,
+        month: `${selectedYear}-${selectedMonth}`,
+        staffName: s.name,
+        department: s.department,
+        position: s.position,
+        employeeId: s.employeeId,
+        bankName: s.bankName,
+        accountNumber: s.accountNumber,
+        accountName: s.accountName || s.name,
+        basicSalary: Number(s.basicSalary) || 0,
+        allowances: Number(s.allowances) || 0,
+        deductions: Number(s.deductions) || 0,
+        deductionReason: s.deductionReason || "",
+        netSalary: Number(s.netSalary) || (Number(s.basicSalary || 0) + Number(s.allowances || 0) - Number(s.deductions || 0)),
+        status: "pending" as const,
+      }));
+
+      const rows = currentRecords.map((r) => [
+        `"${r.staffName || ""}"`,
+        `"${r.employeeId || ""}"`,
+        `"${r.department || ""}"`,
+        `"${r.position || ""}"`,
+        `"${r.bankName || ""}"`,
+        `"${r.accountNumber ? `\t${r.accountNumber}` : ""}"`,
+        `"${r.accountName || r.staffName || ""}"`,
+        r.basicSalary || 0,
+        r.allowances || 0,
+        r.deductions || 0,
+        `"${(r.deductionReason || "").replace(/"/g, '""')}"`,
+        r.netSalary || 0,
+        r.status || "pending",
       ]);
       const csv =
         "data:text/csv;charset=utf-8," +
@@ -612,17 +949,17 @@ export default function StaffsPage() {
         );
       const a = document.createElement("a");
       a.href = csv;
-      a.download = `360_Staff_Payroll_${new Date().toISOString().split("T")[0]}.csv`;
+      a.download = `360_Staff_Payroll_${selectedYear}_${selectedMonth}_${selectedMonthName}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      setSuccessMsg("Payroll CSV downloaded with IT Department verification signature.");
+      setSuccessMsg(`Payroll CSV for ${selectedMonthName} ${selectedYear} downloaded.`);
     } finally {
       setDownloadingCsv(false);
     }
   };
 
-  // Docs upload/delete
+  // ─── Documents ─────────────────────────────────────────────────────────────
   const handleUploadDocument = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStaffForDocs || !docFile || !docTitle) { alert("Fill all fields"); return; }
@@ -652,6 +989,21 @@ export default function StaffsPage() {
     } catch (err: any) { setError("Delete failed: " + err.message); }
   };
 
+  // Aggregates for current month
+  const currentMonthTotals = useMemo(() => {
+    const list = monthlyRecords.length > 0 ? monthlyRecords : staff.map((s) => ({
+      basicSalary: Number(s.basicSalary) || 0,
+      allowances: Number(s.allowances) || 0,
+      deductions: Number(s.deductions) || 0,
+      netSalary: Number(s.netSalary) || (Number(s.basicSalary || 0) + Number(s.allowances || 0) - Number(s.deductions || 0)),
+    }));
+    const totalBasic = list.reduce((acc, r) => acc + (Number(r.basicSalary) || 0), 0);
+    const totalAllowances = list.reduce((acc, r) => acc + (Number(r.allowances) || 0), 0);
+    const totalDeductions = list.reduce((acc, r) => acc + (Number(r.deductions) || 0), 0);
+    const totalNet = list.reduce((acc, r) => acc + (Number(r.netSalary) || 0), 0);
+    return { count: list.length, totalBasic, totalAllowances, totalDeductions, totalNet };
+  }, [monthlyRecords, staff]);
+
   // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
     <>
@@ -660,18 +1012,28 @@ export default function StaffsPage() {
         @keyframes slideDown360 { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
         @keyframes fadeIn360 { from { opacity:0; } to { opacity:1; } }
         .sig-panel-360 { animation: slideDown360 0.25s ease; }
+        .payroll-table-scroll::-webkit-scrollbar { height: 8px; }
+        .payroll-table-scroll::-webkit-scrollbar-track { background: #F1F5F9; border-radius: 4px; }
+        .payroll-table-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+        .payroll-table-scroll::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
         .card-wrapper-360 { animation: fadeIn360 0.4s ease; }
 
         /* ── Responsive ── */
         .staff-header-row { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; }
         .staff-tabs { display:flex; border-bottom:2px solid #E5E7EB; gap:8px; font-size:14px; font-weight:700; overflow-x:auto; }
-        .staff-tab-btn { padding:12px 8px; background:none; border:none; border-bottom:3px solid transparent; cursor:pointer; font-weight:700; transition:all 0.2s; white-space:nowrap; }
+        .staff-tab-btn { padding:12px 14px; background:none; border:none; border-bottom:3px solid transparent; cursor:pointer; font-weight:700; transition:all 0.2s; white-space:nowrap; }
         .staff-form-grid { display:grid; gap:16px; grid-template-columns:1fr 1fr; }
         .staff-sal-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
         .staff-doc-layout { display:grid; grid-template-columns:1fr 2fr; gap:24px; }
         .staff-table-wrap { overflow-x:auto; }
         .staff-btn-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+        .payroll-kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+        @media (max-width:1024px) {
+          .payroll-kpi-grid { grid-template-columns: repeat(3, 1fr); }
+        }
         @media (max-width:768px) {
+          .payroll-kpi-grid { grid-template-columns: 1fr 1fr; }
           .staff-form-grid { grid-template-columns:1fr !important; }
           .staff-sal-grid { grid-template-columns:1fr 1fr !important; }
           .staff-doc-layout { grid-template-columns:1fr !important; }
@@ -680,8 +1042,9 @@ export default function StaffsPage() {
           .sig-panel-360 { grid-template-columns:1fr !important; }
         }
         @media (max-width:480px) {
+          .payroll-kpi-grid { grid-template-columns: 1fr; }
           .staff-sal-grid { grid-template-columns:1fr !important; }
-          .staff-tab-btn { font-size:12px; padding:10px 4px; }
+          .staff-tab-btn { font-size:12px; padding:10px 8px; }
         }
 
         @media print {
@@ -704,8 +1067,8 @@ export default function StaffsPage() {
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
           <div>
-            <h2 style={{ margin: "0 0 4px", fontSize: 24, fontWeight: 800 }}>Staff Management</h2>
-            <p style={{ margin: 0, color: "#666", fontSize: 14 }}>ID Cards · Payroll · Documents · Staff Directory</p>
+            <h2 style={{ margin: "0 0 4px", fontSize: 24, fontWeight: 800 }}>Staff & Payroll Management</h2>
+            <p style={{ margin: 0, color: "#666", fontSize: 14 }}>CR80 Identity Cards · Monthly Banking Schedule · Archive · Documents</p>
           </div>
           <div className="staff-btn-row">
             <LoaderButton
@@ -722,10 +1085,10 @@ export default function StaffsPage() {
             {activeTab === "salary" && (
               <>
                 <LoaderButton loading={downloadingPayrollPdf} onClick={downloadPayrollPDF} style={{ ...btn, background: "#1a365d", display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <FileDown size={14} /> Bank Payroll (PDF)
+                  <FileDown size={14} /> Bank Advice (PDF)
                 </LoaderButton>
                 <LoaderButton loading={downloadingCsv} onClick={downloadPayrollCSV} style={{ ...btn, background: "#10B981", display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <Download size={14} /> Download CSV
+                  <Download size={14} /> Bank CSV
                 </LoaderButton>
               </>
             )}
@@ -751,10 +1114,10 @@ export default function StaffsPage() {
           }}>
             <div>
               <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
-                <PenTool size={16} color="#FF7F50" /> Director / CEO Signature
+                <PenTool size={16} color="#FF7F50" /> Managing Director / CEO Official Signature
               </div>
-              <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 14 }}>
-                Upload the Managing Director's signature image. It will automatically appear on every generated ID card back.
+              <div style={{ fontSize: 12, opacity: 0.85, marginBottom: 14 }}>
+                Upload the Managing Director's official signature. It is dynamically embedded onto the back of every CR80 vertical badge.
               </div>
               <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                 {directorSigUrl && (
@@ -785,7 +1148,7 @@ export default function StaffsPage() {
                   <div style={{ fontSize: 11, opacity: 0.65, marginBottom: 6 }}>Active Signature</div>
                   <img src={directorSigUrl} alt="Active Sig" style={{ height: 44, objectFit: "contain", filter: "brightness(0) invert(1)" }} />
                   <div style={{ fontSize: 11, marginTop: 6, color: "#6EE7B7", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                    <Check size={12} /> Enabled on All ID Cards
+                    <Check size={12} /> Embedded on All Cards
                   </div>
                 </div>
               ) : (
@@ -806,7 +1169,7 @@ export default function StaffsPage() {
               {tab === "directory" ? (
                 <><Users size={15} /> Staff Directory</>
               ) : tab === "salary" ? (
-                <><DollarSign size={15} /> Salary & Banking</>
+                <><DollarSign size={15} /> Monthly Salary & Banking</>
               ) : (
                 <><FolderOpen size={15} /> Documents</>
               )}
@@ -831,7 +1194,7 @@ export default function StaffsPage() {
           <form onSubmit={handleSubmit} style={card}>
             <h3 style={{ margin: "0 0 20px", display: "flex", alignItems: "center", gap: 8 }}>
               {editingId ? <Edit size={18} color="#FF7F50" /> : <Plus size={18} color="#FF7F50" />}
-              {editingId ? "Edit Staff Profile" : "Register New Staff Member"}
+              {editingId ? "Edit Staff Profile & Persistent Salary" : "Register New Staff Member"}
             </h3>
             <div className="staff-form-grid">
               <label style={lbl}>Full Name *<input placeholder="Ex: John Doe" required value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inp} /></label>
@@ -843,10 +1206,10 @@ export default function StaffsPage() {
 
               {/* Photo */}
               <div style={{ gridColumn: "span 2", background: "#F9FAFB", padding: 16, borderRadius: 12 }}>
-                <label style={{ ...lbl, marginBottom: 8 }}>Staff Passport Photo</label>
+                <label style={{ ...lbl, marginBottom: 8 }}>Staff Passport Photo (Vertical Portrait)</label>
                 <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
                   {form.photoUrl && !imageFile && (
-                    <img src={form.photoUrl} alt="Photo" style={{ width: 56, height: 66, objectFit: "cover", borderRadius: 8, border: "2px solid #ff7f50" }} />
+                    <img src={form.photoUrl} alt="Photo" style={{ width: 60, height: 74, objectFit: "cover", borderRadius: 8, border: "2px solid #ff7f50" }} />
                   )}
                   <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} style={inp} />
                 </div>
@@ -854,85 +1217,64 @@ export default function StaffsPage() {
 
               {/* Signature */}
               <div style={{ gridColumn: "span 2", background: "#F9FAFB", padding: 16, borderRadius: 12 }}>
-                <label style={{ ...lbl, marginBottom: 8 }}>Cardholder Signature Image</label>
+                <label style={{ ...lbl, marginBottom: 8 }}>Staff Cardholder Signature</label>
                 <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
                   {form.signatureUrl && !signatureFile && (
-                    <img src={form.signatureUrl} alt="Sig" style={{ height: 36, objectFit: "contain", background: "#fff", padding: 4, borderRadius: 4, border: "1px solid #ccc" }} />
+                    <img src={form.signatureUrl} alt="Signature" style={{ height: 32, objectFit: "contain", background: "#fff", padding: 4, borderRadius: 6, border: "1px solid #ccc" }} />
                   )}
                   <input type="file" accept="image/*" onChange={(e) => setSignatureFile(e.target.files?.[0] || null)} style={inp} />
                 </div>
               </div>
 
-              {/* Salary */}
-              <div style={{ gridColumn: "span 2", borderTop: "1px solid #E5E7EB", paddingTop: 16, marginTop: 4 }}>
-                <h4 style={{ margin: "0 0 14px", color: "#1F2937", display: "flex", alignItems: "center", gap: 6 }}>
-                  <DollarSign size={16} color="#FF7F50" /> Banking & Salary
-                </h4>
-                <div className="staff-sal-grid">
-                  <label style={lbl}>Bank Name<input placeholder="Zenith Bank" value={form.bankName || ""} onChange={(e) => setForm({ ...form, bankName: e.target.value })} style={inp} /></label>
+              {/* Banking & Base Salary */}
+              <div style={{ gridColumn: "span 2", background: "#EFF6FF", border: "1px solid #BFDBFE", padding: 16, borderRadius: 12 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, color: "#1E3A8A", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                  <DollarSign size={16} color="#FF7F50" /> Persistent Banking Details & Base Salary Structure
+                </div>
+                <div style={{ fontSize: 12, color: "#475569", marginBottom: 14 }}>
+                  Bank details and basic salary remain locked every month and carry forward automatically. Update here if staff receives a promotion or changes bank accounts.
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+                  <label style={lbl}>Bank Name<input placeholder="Ex: Access Bank" value={form.bankName || ""} onChange={(e) => setForm({ ...form, bankName: e.target.value })} style={inp} /></label>
                   <label style={lbl}>Account Number<input placeholder="0123456789" value={form.accountNumber || ""} onChange={(e) => setForm({ ...form, accountNumber: e.target.value })} style={inp} /></label>
-                  <label style={lbl}>Account Name<input placeholder="John Doe" value={form.accountName || ""} onChange={(e) => setForm({ ...form, accountName: e.target.value })} style={inp} /></label>
+                  <label style={lbl}>Account Name<input placeholder="Account Holder Name" value={form.accountName || ""} onChange={(e) => setForm({ ...form, accountName: e.target.value })} style={inp} /></label>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   <label style={lbl}>Basic Salary (₦)<input type="number" min="0" value={form.basicSalary || ""} onChange={(e) => handleSalaryChange("basicSalary", Number(e.target.value))} style={inp} /></label>
                   <label style={lbl}>Allowances (₦)<input type="number" min="0" value={form.allowances || ""} onChange={(e) => handleSalaryChange("allowances", Number(e.target.value))} style={inp} /></label>
-                  <div style={{ display: "grid", gap: 6 }}>
-                    <label style={lbl}>Deductions (₦)<input type="number" min="0" value={form.deductions || ""} onChange={(e) => handleSalaryChange("deductions", Number(e.target.value))} style={inp} /></label>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "#DC2626", marginBottom: 4 }}>Deduction Reason <span style={{ color: "#9CA3AF", fontWeight: 400 }}>(required if deducting)</span></div>
-                      <input
-                        placeholder="e.g. Loan repayment, Late attendance, Equipment damage…"
-                        value={form.deductionReason || ""}
-                        onChange={(e) => setForm({ ...form, deductionReason: e.target.value })}
-                        style={{ ...inp, borderColor: form.deductions ? "#FCA5A5" : "#e5e5e5", background: form.deductions ? "#FFF5F5" : "#fff" }}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div style={{ marginTop: 12, padding: 12, background: "#EFF6FF", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontWeight: 700, color: "#1E40AF" }}>Net Salary:</span>
-                  <span style={{ fontSize: 18, fontWeight: 900, color: "#1E3A8A" }}>₦{(form.netSalary || 0).toLocaleString()}</span>
                 </div>
               </div>
-
-              <label style={{ display: "flex", alignItems: "center", gap: 8, gridColumn: "span 2", marginTop: 4 }}>
-                <input type="checkbox" checked={form.active ?? true} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
-                <span style={{ fontSize: 14, fontWeight: 600 }}>Active Staff Member</span>
-              </label>
             </div>
 
-            <div style={{ display: "flex", gap: 12, marginTop: 22 }}>
-              <LoaderButton type="submit" loading={loading || uploadingImage} style={btn}>
-                {editingId ? "Save Changes" : "Create Staff Profile"}
-              </LoaderButton>
-              <LoaderButton type="button" onClick={() => setShowForm(false)} style={{ ...btn, background: "#9CA3AF" }}>
-                Cancel
+            <div style={{ marginTop: 20, display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button type="button" onClick={() => { setShowForm(false); setEditingId(null); }} style={{ ...smallBtn, padding: "10px 18px" }}>Cancel</button>
+              <LoaderButton type="submit" loading={loading || uploadingImage} style={{ ...btn, padding: "10px 24px" }}>
+                {editingId ? "Save Profile Changes" : "Register Staff Member"}
               </LoaderButton>
             </div>
           </form>
         )}
 
-        {/* ── VIEW 1: DIRECTORY ─────────────────────────────────────────── */}
+        {/* ── VIEW 1: STAFF DIRECTORY ────────────────────────────────────── */}
         {activeTab === "directory" && (
           <div style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <span style={{ fontSize: 14, color: "#666" }}>Total Staff: <strong>{staff.length}</strong></span>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
-                <input type="checkbox"
-                  checked={staff.length > 0 && selectedIds.size === staff.length}
-                  onChange={(e) => {
-                    if (e.target.checked) setSelectedIds(new Set(staff.map((s) => s.$id)));
-                    else setSelectedIds(new Set());
-                  }}
-                />
-                Select All for ID Printing
-              </label>
+              <div>
+                <h3 style={{ margin: "0 0 4px" }}>Active Staff Roster ({staff.length})</h3>
+                <p style={{ margin: 0, fontSize: 13, color: "#666" }}>Select staff to preview or generate high-res CR80 vertical ID badges</p>
+              </div>
+              {staff.length > 0 && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setSelectedIds(new Set(staff.map((s) => s.$id)))} style={{ ...smallBtn, background: "#EFF6FF", color: "#1D4ED8" }}>Select All</button>
+                  <button onClick={() => setSelectedIds(new Set())} style={{ ...smallBtn }}>Clear</button>
+                </div>
+              )}
             </div>
 
-            {loading && staff.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 40, color: "#999", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-                <Spinner size={28} color="#ff7f50" /><div>Loading staff…</div>
-              </div>
+            {loading ? (
+              <div style={{ textAlign: "center", padding: 40 }}><Spinner size={24} color="#ff7f50" /></div>
             ) : (
-              <div style={{ overflowX: "auto" }}>
+              <div className="staff-table-wrap">
                 <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                   <thead>
                     <tr style={{ borderBottom: "2px solid #F3F4F6", background: "#FAFAFA" }}>
@@ -951,7 +1293,7 @@ export default function StaffsPage() {
                           <input type="checkbox" checked={selectedIds.has(m.$id)} onChange={() => toggleSelection(m.$id)} />
                         </td>
                         <td style={{ padding: 10 }}>
-                          <div style={{ width: 42, height: 48, borderRadius: 6, background: "#eee", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <div style={{ width: 44, height: 52, borderRadius: 6, background: "#eee", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #E5E7EB" }}>
                             {m.photoUrl ? <img src={m.photoUrl} alt={m.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={22} color="#9CA3AF" />}
                           </div>
                         </td>
@@ -991,73 +1333,426 @@ export default function StaffsPage() {
                   </tbody>
                 </table>
                 {staff.length === 0 && !loading && (
-                  <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>No staff registered yet.</div>
+                  <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>No staff registered yet. Click &quot;Add Staff&quot; above.</div>
                 )}
               </div>
             )}
           </div>
         )}
 
-        {/* ── VIEW 2: SALARY ──────────────────────────────────────────────── */}
+        {/* ── VIEW 2: MONTHLY SALARY & BANKING ────────────────────────────── */}
         {activeTab === "salary" && (
-          <div style={card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <div>
-                <h3 style={{ margin: "0 0 4px" }}>Salary & Banking Store</h3>
-                <p style={{ margin: 0, fontSize: 13, color: "#666" }}>Account numbers, bank details, payroll export</p>
-              </div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                <LoaderButton loading={downloadingPayrollPdf} onClick={downloadPayrollPDF} style={{ ...btn, background: "#1a365d", display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <FileDown size={14} /> Download Bank Payroll (PDF)
-                </LoaderButton>
-                <LoaderButton loading={downloadingCsv} onClick={downloadPayrollCSV} style={{ ...btn, background: "#10B981", display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <Download size={14} /> Download Payroll (CSV)
-                </LoaderButton>
+          <div style={{ display: "grid", gap: 20 }}>
+
+            {/* Sub-Tab Navigation Bar & Month Selector */}
+            <div style={{ ...card, padding: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
+                {/* Subtabs */}
+                <div style={{ display: "flex", gap: 8, background: "#F1F5F9", padding: 4, borderRadius: 10 }}>
+                  <button
+                    onClick={() => setSalarySubTab("schedule")}
+                    style={{
+                      padding: "8px 16px", borderRadius: 8, border: "none", cursor: "pointer",
+                      fontWeight: 700, fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6,
+                      background: salarySubTab === "schedule" ? "#fff" : "transparent",
+                      color: salarySubTab === "schedule" ? "#0F172A" : "#64748B",
+                      boxShadow: salarySubTab === "schedule" ? "0 2px 6px rgba(0,0,0,0.08)" : "none",
+                    }}
+                  >
+                    <Calendar size={14} color={salarySubTab === "schedule" ? "#FF7F50" : "#64748B"} />
+                    Monthly Schedule ({selectedMonthName} {selectedYear})
+                  </button>
+                  <button
+                    onClick={() => setSalarySubTab("history")}
+                    style={{
+                      padding: "8px 16px", borderRadius: 8, border: "none", cursor: "pointer",
+                      fontWeight: 700, fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6,
+                      background: salarySubTab === "history" ? "#fff" : "transparent",
+                      color: salarySubTab === "history" ? "#0F172A" : "#64748B",
+                      boxShadow: salarySubTab === "history" ? "0 2px 6px rgba(0,0,0,0.08)" : "none",
+                    }}
+                  >
+                    <History size={14} color={salarySubTab === "history" ? "#FF7F50" : "#64748B"} />
+                    Past Months & Reports Archive
+                  </button>
+                </div>
+
+                {/* Month & Year Selectors */}
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#F8FAFC", border: "1px solid #E2E8F0", padding: "6px 12px", borderRadius: 10 }}>
+                    <Calendar size={15} color="#FF7F50" />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>Period:</span>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value)}
+                      style={{ border: "none", background: "transparent", fontWeight: 700, fontSize: 13, color: "#0F172A", cursor: "pointer" }}
+                    >
+                      {MONTHS_LIST.map((m) => (
+                        <option key={m.value} value={m.value}>{m.name}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(e.target.value)}
+                      style={{ border: "none", background: "transparent", fontWeight: 700, fontSize: 13, color: "#0F172A", cursor: "pointer" }}
+                    >
+                      {YEARS_LIST.map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const cur = new Date();
+                      setSelectedYear(String(cur.getFullYear()));
+                      setSelectedMonth(String(cur.getMonth() + 1).padStart(2, "0"));
+                    }}
+                    style={{ ...smallBtn, background: "#EFF6FF", color: "#1D4ED8", padding: "8px 12px" }}
+                  >
+                    Current Month
+                  </button>
+
+                  <LoaderButton
+                    loading={loadingMonthlyPayroll}
+                    onClick={() => fetchMonthlyPayroll(selectedYear, selectedMonth)}
+                    style={{ ...smallBtn, padding: "8px 12px", display: "inline-flex", alignItems: "center", gap: 4 }}
+                    title="Refresh schedule"
+                  >
+                    <RefreshCw size={13} />
+                  </LoaderButton>
+                </div>
               </div>
             </div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-                <thead>
-                  <tr style={{ borderBottom: "2px solid #E5E7EB", background: "#F9FAFB" }}>
-                    <th style={{ padding: 12 }}>Staff Name</th>
-                    <th style={{ padding: 12 }}>Bank</th>
-                    <th style={{ padding: 12 }}>Account No.</th>
-                    <th style={{ padding: 12 }}>Account Name</th>
-                    <th style={{ padding: 12, textAlign: "right" }}>Basic (₦)</th>
-                    <th style={{ padding: 12, textAlign: "right" }}>Allowances</th>
-                    <th style={{ padding: 12, textAlign: "right" }}>Deductions</th>
-                    <th style={{ padding: 12 }}>Deduction Reason</th>
-                    <th style={{ padding: 12, textAlign: "right" }}>Net (₦)</th>
-                    <th style={{ padding: 12, textAlign: "center" }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {staff.map((s) => {
-                    const net = s.netSalary || (Number(s.basicSalary||0)+Number(s.allowances||0)-Number(s.deductions||0));
-                    return (
-                      <tr key={s.$id} style={{ borderBottom: "1px solid #F3F4F6" }}>
-                        <td style={{ padding: 12 }}><strong>{s.name}</strong><div style={{ fontSize: 12, color: "#666" }}>{s.employeeId || s.position}</div></td>
-                        <td style={{ padding: 12 }}>{s.bankName || <span style={{ color: "#aaa" }}>—</span>}</td>
-                        <td style={{ padding: 12, fontFamily: "monospace", fontWeight: 600 }}>{s.accountNumber || <span style={{ color: "#aaa" }}>—</span>}</td>
-                        <td style={{ padding: 12 }}>{s.accountName || s.name}</td>
-                        <td style={{ padding: 12, textAlign: "right" }}>{(s.basicSalary||0).toLocaleString()}</td>
-                        <td style={{ padding: 12, textAlign: "right", color: "#059669" }}>+{(s.allowances||0).toLocaleString()}</td>
-                        <td style={{ padding: 12, textAlign: "right", color: "#DC2626" }}>-{(s.deductions||0).toLocaleString()}</td>
-                        <td style={{ padding: 12, fontSize: 12, color: s.deductionReason ? "#92400E" : "#aaa", fontStyle: s.deductionReason ? "normal" : "italic", maxWidth: 160 }}>
-                          {s.deductionReason || "—"}
-                        </td>
-                        <td style={{ padding: 12, textAlign: "right", fontWeight: 800, color: "#1E3A8A" }}>₦{net.toLocaleString()}</td>
-                        <td style={{ padding: 12, textAlign: "center" }}>
-                          <LoaderButton onClick={() => handleEdit(s)} style={{ ...smallBtn, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                            <Edit size={12} /> Update
-                          </LoaderButton>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+
+            {/* KPI Cards for Selected Month */}
+            <div className="payroll-kpi-grid">
+              <div style={{ ...card, padding: 16, borderLeft: "4px solid #1E293B" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>Staff on Schedule</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: "#0F172A", marginTop: 4 }}>{currentMonthTotals.count} Persons</div>
+                <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>For {selectedMonthName} {selectedYear}</div>
+              </div>
+
+              <div style={{ ...card, padding: 16, borderLeft: "4px solid #1E40AF" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#1E40AF", textTransform: "uppercase" }}>Total Basic Salary</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: "#1E3A8A", marginTop: 4 }}>₦{currentMonthTotals.totalBasic.toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: "#60A5FA", marginTop: 2 }}>Persistent base pay</div>
+              </div>
+
+              <div style={{ ...card, padding: 16, borderLeft: "4px solid #059669" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#059669", textTransform: "uppercase" }}>Total Allowances</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: "#047857", marginTop: 4 }}>+₦{currentMonthTotals.totalAllowances.toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: "#34D399", marginTop: 2 }}>Welfare & housing</div>
+              </div>
+
+              <div style={{ ...card, padding: 16, borderLeft: "4px solid #DC2626" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", textTransform: "uppercase" }}>{selectedMonthName.slice(0, 3)} Deductions</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: "#B91C1C", marginTop: 4 }}>-₦{currentMonthTotals.totalDeductions.toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: "#F87171", marginTop: 2 }}>Month-specific adjustments</div>
+              </div>
+
+              <div style={{ ...card, padding: 16, borderLeft: "4px solid #FF7F50", background: "linear-gradient(135deg, #FFF7ED 0%, #FFFFFF 100%)" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#EA580C", textTransform: "uppercase" }}>Net Bank Payout</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: "#C2410C", marginTop: 4 }}>₦{currentMonthTotals.totalNet.toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: "#FB923C", marginTop: 2 }}>Credit Advice Total</div>
+              </div>
             </div>
+
+            {/* Sub-tab 1: Monthly Schedule */}
+            {salarySubTab === "schedule" && (
+              <div style={card}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+                  <div>
+                    <h3 style={{ margin: "0 0 4px", display: "flex", alignItems: "center", gap: 8 }}>
+                      <Calendar size={18} color="#FF7F50" />
+                      Monthly Bank Payment Schedule · {selectedMonthName} {selectedYear}
+                    </h3>
+                    <p style={{ margin: 0, fontSize: 13, color: "#64748B" }}>
+                      Bank details & base salary carry over every month. Deductions and deduction reasons are updated uniquely per month.
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                    <LoaderButton
+                      loading={savingMonthlyPayroll}
+                      onClick={handleBulkSaveMonthlyPayroll}
+                      style={{ ...btn, background: "#2563EB", display: "inline-flex", alignItems: "center", gap: 6 }}
+                    >
+                      <Save size={14} /> Lock & Save {selectedMonthName} Schedule
+                    </LoaderButton>
+                    <LoaderButton
+                      loading={downloadingPayrollPdf}
+                      onClick={downloadPayrollPDF}
+                      style={{ ...btn, background: "#1a365d", display: "inline-flex", alignItems: "center", gap: 6 }}
+                    >
+                      <FileDown size={14} /> Export Bank Advice (PDF)
+                    </LoaderButton>
+                    <LoaderButton
+                      loading={downloadingCsv}
+                      onClick={downloadPayrollCSV}
+                      style={{ ...btn, background: "#10B981", display: "inline-flex", alignItems: "center", gap: 6 }}
+                    >
+                      <Download size={14} /> Export Bank CSV
+                    </LoaderButton>
+                  </div>
+                </div>
+
+                {/* Search / Filter Staff in this Month */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+                  <div style={{ position: "relative", flex: 1, minWidth: 260, maxWidth: 420 }}>
+                    <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94A3B8" }} />
+                    <input
+                      type="text"
+                      value={monthSearchFilter}
+                      onChange={(e) => setMonthSearchFilter(e.target.value)}
+                      placeholder="Search staff name, ID, department, or bank..."
+                      style={{ ...inp, paddingLeft: 36, paddingRight: 32, fontSize: 13, background: "#F8FAFC" }}
+                    />
+                    {monthSearchFilter && (
+                      <button
+                        onClick={() => setMonthSearchFilter("")}
+                        style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#94A3B8" }}
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#64748B", fontWeight: 600 }}>
+                    Showing {monthlyRecords.filter((r) => {
+                      if (!monthSearchFilter.trim()) return true;
+                      const q = monthSearchFilter.toLowerCase();
+                      return (
+                        (r.staffName || "").toLowerCase().includes(q) ||
+                        (r.employeeId || "").toLowerCase().includes(q) ||
+                        (r.department || "").toLowerCase().includes(q) ||
+                        (r.bankName || "").toLowerCase().includes(q) ||
+                        (r.accountNumber || "").toLowerCase().includes(q)
+                      );
+                    }).length} of {monthlyRecords.length} staff records
+                  </div>
+                </div>
+
+                {loadingMonthlyPayroll ? (
+                  <div style={{ textAlign: "center", padding: 40 }}><Spinner size={24} color="#ff7f50" /></div>
+                ) : (
+                  <div
+                    className="payroll-table-scroll"
+                    style={{
+                      overflowX: "auto",
+                      width: "100%",
+                      WebkitOverflowScrolling: "touch",
+                      borderRadius: 10,
+                      border: "1px solid #E2E8F0",
+                      background: "#FFFFFF",
+                    }}
+                  >
+                    <table style={{ minWidth: 1180, width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "2px solid #E2E8F0", background: "#F8FAFC" }}>
+                          <th style={{ padding: "14px 12px", width: 40 }}>#</th>
+                          <th style={{ padding: "14px 12px" }}>Staff Member</th>
+                          <th style={{ padding: "14px 12px" }}>Bank & Account</th>
+                          <th style={{ padding: "14px 12px", textAlign: "right" }}>Basic (₦)</th>
+                          <th style={{ padding: "14px 12px", textAlign: "right" }}>Allowances (₦)</th>
+                          <th style={{ padding: "14px 12px", textAlign: "right", color: "#DC2626" }}>Month Deduction</th>
+                          <th style={{ padding: "14px 12px" }}>Deduction Reason</th>
+                          <th style={{ padding: "14px 12px", textAlign: "right", color: "#1E3A8A" }}>Net Payout (₦)</th>
+                          <th style={{ padding: "14px 12px", textAlign: "center" }}>Status</th>
+                          <th style={{ padding: "14px 12px", textAlign: "center" }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthlyRecords
+                          .filter((r) => {
+                            if (!monthSearchFilter.trim()) return true;
+                            const q = monthSearchFilter.toLowerCase();
+                            return (
+                              (r.staffName || "").toLowerCase().includes(q) ||
+                              (r.employeeId || "").toLowerCase().includes(q) ||
+                              (r.department || "").toLowerCase().includes(q) ||
+                              (r.bankName || "").toLowerCase().includes(q) ||
+                              (r.accountNumber || "").toLowerCase().includes(q)
+                            );
+                          })
+                          .map((r, idx) => {
+                            const net = Math.max(0, (Number(r.basicSalary) || 0) + (Number(r.allowances) || 0) - (Number(r.deductions) || 0));
+                            return (
+                              <tr key={r.staffId || idx} style={{ borderBottom: "1px solid #F1F5F9", transition: "background 0.15s" }} onMouseEnter={(e) => e.currentTarget.style.background = "#F8FAFC"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                                <td style={{ padding: "12px", color: "#94A3B8", fontSize: 12, fontWeight: 600 }}>{idx + 1}</td>
+                                <td style={{ padding: "12px" }}>
+                                  <div style={{ fontWeight: 700, color: "#0F172A", fontSize: 13.5 }}>{r.staffName}</div>
+                                  <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                                    <span style={{ fontWeight: 600, color: "#1E40AF" }}>{r.employeeId || "—"}</span> · {r.department || "General"} {r.position ? `· ${r.position}` : ""}
+                                  </div>
+                                </td>
+                                <td style={{ padding: "12px" }}>
+                                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1E293B" }}>{r.bankName || <span style={{ color: "#aaa" }}>—</span>}</div>
+                                  <div style={{ fontFamily: "monospace", fontSize: 12, color: "#0284C7", fontWeight: 600, marginTop: 1 }}>{r.accountNumber || "—"}</div>
+                                  <div style={{ fontSize: 10.5, color: "#94A3B8" }}>{r.accountName || r.staffName}</div>
+                                </td>
+                                <td style={{ padding: "12px", textAlign: "right", fontWeight: 700, color: "#0F172A" }}>
+                                  ₦{(Number(r.basicSalary) || 0).toLocaleString()}
+                                </td>
+                                <td style={{ padding: "12px", textAlign: "right", color: "#059669", fontWeight: 700 }}>
+                                  +₦{(Number(r.allowances) || 0).toLocaleString()}
+                                </td>
+                                <td style={{ padding: "12px", textAlign: "right", color: (Number(r.deductions) || 0) > 0 ? "#DC2626" : "#94A3B8", fontWeight: 700 }}>
+                                  {(Number(r.deductions) || 0) > 0 ? `-₦${(Number(r.deductions) || 0).toLocaleString()}` : "₦0"}
+                                </td>
+                                <td style={{ padding: "12px", maxWidth: 200 }}>
+                                  {r.deductionReason ? (
+                                    <span style={{ fontSize: 11.5, background: "#FEF2F2", color: "#991B1B", padding: "4px 8px", borderRadius: 6, display: "inline-block", fontWeight: 500, lineHeight: 1.3 }}>
+                                      {r.deductionReason}
+                                    </span>
+                                  ) : (
+                                    <span style={{ fontSize: 12, color: "#94A3B8", fontStyle: "italic" }}>None</span>
+                                  )}
+                                </td>
+                                <td style={{ padding: "12px", textAlign: "right", fontWeight: 900, color: "#1E3A8A", fontSize: 14 }}>
+                                  ₦{net.toLocaleString()}
+                                </td>
+                                <td style={{ padding: "12px", textAlign: "center" }}>
+                                  <span style={{
+                                    padding: "4px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: "capitalize",
+                                    background: r.status === "paid" ? "#DCFCE7" : r.status === "approved" ? "#DBEAFE" : "#FEF3C7",
+                                    color: r.status === "paid" ? "#166534" : r.status === "approved" ? "#1E40AF" : "#92400E",
+                                  }}>
+                                    {r.status || "pending"}
+                                  </span>
+                                </td>
+                                <td style={{ padding: "12px", textAlign: "center" }}>
+                                  <button
+                                    onClick={() => handleOpenEditMonthModal(r)}
+                                    style={{
+                                      ...smallBtn,
+                                      background: "#EFF6FF",
+                                      color: "#1D4ED8",
+                                      border: "1px solid #BFDBFE",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 5,
+                                      fontWeight: 700,
+                                      padding: "7px 12px",
+                                      borderRadius: 7,
+                                    }}
+                                    title="Update monthly salary, deductions, bank details or status"
+                                  >
+                                    <Edit size={13} /> Edit Month Record
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                    {monthlyRecords.length === 0 && !loadingMonthlyPayroll && (
+                      <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>No staff records available for this month.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Sub-tab 2: History & Report Archives */}
+            {salarySubTab === "history" && (
+              <div style={card}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ margin: "0 0 4px", display: "flex", alignItems: "center", gap: 8 }}>
+                      <History size={18} color="#FF7F50" />
+                      Historical Payroll Records & Report Archive
+                    </h3>
+                    <p style={{ margin: 0, fontSize: 13, color: "#64748B" }}>
+                      Track previous months&apos; payroll payouts, audits, and generate past bank advice reports instantly.
+                    </p>
+                  </div>
+                  <LoaderButton
+                    loading={loadingHistory}
+                    onClick={fetchPayrollHistory}
+                    style={{ ...smallBtn, padding: "8px 14px", display: "inline-flex", alignItems: "center", gap: 6 }}
+                  >
+                    <RefreshCw size={13} /> Refresh Archives
+                  </LoaderButton>
+                </div>
+
+                {loadingHistory ? (
+                  <div style={{ textAlign: "center", padding: 40 }}><Spinner size={24} color="#ff7f50" /></div>
+                ) : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "2px solid #E2E8F0", background: "#F8FAFC" }}>
+                          <th style={{ padding: 12 }}>Payment Month</th>
+                          <th style={{ padding: 12, textAlign: "center" }}>Staff Count</th>
+                          <th style={{ padding: 12, textAlign: "right" }}>Total Basic (₦)</th>
+                          <th style={{ padding: 12, textAlign: "right" }}>Total Allowances (₦)</th>
+                          <th style={{ padding: 12, textAlign: "right" }}>Total Deductions (₦)</th>
+                          <th style={{ padding: 12, textAlign: "right" }}>Net Bank Payout (₦)</th>
+                          <th style={{ padding: 12, textAlign: "center" }}>Status</th>
+                          <th style={{ padding: 12, textAlign: "center" }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payrollHistory.map((item) => {
+                          const [yr, mo] = (item.month || "").split("-");
+                          const mName = MONTHS_LIST.find((m) => m.value === mo)?.name || mo;
+                          return (
+                            <tr key={item.month} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                              <td style={{ padding: 12 }}>
+                                <div style={{ fontWeight: 800, color: "#0F172A", fontSize: 14 }}>{mName} {yr}</div>
+                                <div style={{ fontSize: 11, color: "#64748B" }}>Reference: 360-PAYROLL-{yr}{mo}</div>
+                              </td>
+                              <td style={{ padding: 12, textAlign: "center", fontWeight: 700 }}>
+                                {item.count} Staff
+                              </td>
+                              <td style={{ padding: 12, textAlign: "right" }}>
+                                {(Number(item.totalBasic) || 0).toLocaleString()}
+                              </td>
+                              <td style={{ padding: 12, textAlign: "right", color: "#059669" }}>
+                                +{(Number(item.totalAllowances) || 0).toLocaleString()}
+                              </td>
+                              <td style={{ padding: 12, textAlign: "right", color: "#DC2626", fontWeight: 700 }}>
+                                -{(Number(item.totalDeductions) || 0).toLocaleString()}
+                              </td>
+                              <td style={{ padding: 12, textAlign: "right", fontWeight: 800, color: "#1E3A8A", fontSize: 14 }}>
+                                ₦{(Number(item.totalNet) || 0).toLocaleString()}
+                              </td>
+                              <td style={{ padding: 12, textAlign: "center" }}>
+                                <span style={{
+                                  padding: "4px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: "capitalize",
+                                  background: item.status === "paid" ? "#DCFCE7" : item.status === "approved" ? "#DBEAFE" : "#FEF3C7",
+                                  color: item.status === "paid" ? "#166534" : item.status === "approved" ? "#1E40AF" : "#92400E",
+                                }}>
+                                  {item.status || "pending"}
+                                </span>
+                              </td>
+                              <td style={{ padding: 12, textAlign: "center" }}>
+                                <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedYear(yr);
+                                      setSelectedMonth(mo);
+                                      setSalarySubTab("schedule");
+                                    }}
+                                    style={{ ...smallBtn, background: "#EFF6FF", color: "#1D4ED8", display: "inline-flex", alignItems: "center", gap: 4 }}
+                                  >
+                                    <Eye size={12} /> View Schedule
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {payrollHistory.length === 0 && !loadingHistory && (
+                      <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>
+                        No saved monthly records yet. Open &quot;Monthly Schedule&quot; and click &quot;Lock & Save Schedule&quot; to archive a month.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -1096,30 +1791,27 @@ export default function StaffsPage() {
                       Upload Document
                     </LoaderButton>
                   </form>
-                  <h4 style={{ margin: "0 0 10px" }}>Saved Records ({(selectedStaffForDocs.documents||[]).length})</h4>
-                  {!(selectedStaffForDocs.documents?.length) ? (
-                    <p style={{ color: "#9CA3AF", fontStyle: "italic" }}>No documents yet.</p>
+                  <h4 style={{ margin: "0 0 12px", fontSize: 14 }}>Attached Files ({(selectedStaffForDocs.documents||[]).length})</h4>
+                  {(selectedStaffForDocs.documents||[]).length === 0 ? (
+                    <div style={{ color: "#aaa", fontSize: 13, fontStyle: "italic" }}>No documents attached yet.</div>
                   ) : (
-                    <div style={{ display: "grid", gap: 8 }}>
-                      {selectedStaffForDocs.documents.map((doc, idx) => (
-                        <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 12, background: "#fff", border: "1px solid #E5E7EB", borderRadius: 8 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {(selectedStaffForDocs.documents||[]).map((doc, idx) => (
+                        <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#F9FAFB", borderRadius: 8, border: "1px solid #E5E7EB" }}>
                           <div>
-                            <div style={{ fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
-                              <FileText size={15} color="#2563EB" /> {doc.title}
-                            </div>
-                            <div style={{ fontSize: 11, color: "#6B7280" }}>Uploaded: {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : "Recorded"}</div>
+                            <div style={{ fontWeight: 600, fontSize: 13 }}>{doc.title}</div>
+                            <div style={{ fontSize: 11, color: "#888" }}>{doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : ""}</div>
                           </div>
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                          <div style={{ display: "flex", gap: 8 }}>
                             <button
-                              onClick={() => window.open(doc.fileUrl, "_blank", "noopener,noreferrer")}
-                              style={{ ...smallBtn, background: "#EFF6FF", color: "#2563EB", display: "inline-flex", alignItems: "center", gap: 4 }}
+                              onClick={() => window.open(doc.fileUrl, "_blank")}
+                              style={{ ...smallBtn, background: "#EFF6FF", color: "#1D4ED8", display: "inline-flex", alignItems: "center", gap: 4 }}
                             >
                               <Eye size={12} /> View
                             </button>
                             <button
                               onClick={async () => {
                                 try {
-                                  // Force download: fetch blob then create object URL
                                   const res = await fetch(doc.fileUrl);
                                   const blob = await res.blob();
                                   const url = URL.createObjectURL(blob);
@@ -1131,7 +1823,6 @@ export default function StaffsPage() {
                                   document.body.removeChild(a);
                                   URL.revokeObjectURL(url);
                                 } catch {
-                                  // fallback: open in new tab
                                   window.open(doc.fileUrl, "_blank");
                                 }
                               }}
@@ -1153,22 +1844,183 @@ export default function StaffsPage() {
           </div>
         )}
 
-        {/* ── ID CARD MODAL ──────────────────────────────────────────────── */}
+        {/* ── MODAL: EDIT MONTHLY SCHEDULE RECORD ───────────────────────────── */}
+        {editingMonthRecord && (
+          <div style={overlayStyle}>
+            <div style={{ ...modalStyle, maxWidth: 640 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, borderBottom: "1px solid #E2E8F0", paddingBottom: 14 }}>
+                <div>
+                  <h3 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 800, color: "#0F172A", display: "flex", alignItems: "center", gap: 8 }}>
+                    <Calendar size={18} color="#FF7F50" />
+                    Update {selectedMonthName} {selectedYear} Payroll Record
+                  </h3>
+                  <p style={{ margin: 0, fontSize: 12.5, color: "#64748B" }}>
+                    Staff: <strong style={{ color: "#0F172A" }}>{editingMonthRecord.staffName}</strong> (ID: {editingMonthRecord.employeeId || "—"}) · Dept: {editingMonthRecord.department || "General"}
+                  </p>
+                </div>
+                <button onClick={() => setEditingMonthRecord(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748B" }}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveMonthRecord} style={{ display: "grid", gap: 16 }}>
+                {/* Salary Section */}
+                <div style={{ background: "#F8FAFC", padding: 14, borderRadius: 10, border: "1px solid #E2E8F0" }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: "#475569", textTransform: "uppercase", marginBottom: 10, letterSpacing: 0.5 }}>
+                    Salary Breakdown for {selectedMonthName} {selectedYear}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    <label style={lbl}>
+                      Basic Salary (₦) *
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={editMonthBasic}
+                        onChange={(e) => setEditMonthBasic(Number(e.target.value))}
+                        style={{ ...inp, fontWeight: 700 }}
+                      />
+                    </label>
+
+                    <label style={lbl}>
+                      Allowances (₦)
+                      <input
+                        type="number"
+                        min="0"
+                        value={editMonthAllowances}
+                        onChange={(e) => setEditMonthAllowances(Number(e.target.value))}
+                        style={{ ...inp, color: "#059669", fontWeight: 700 }}
+                      />
+                    </label>
+
+                    <label style={lbl}>
+                      Month Deduction (₦)
+                      <input
+                        type="number"
+                        min="0"
+                        value={editMonthDeduction}
+                        onChange={(e) => setEditMonthDeduction(Number(e.target.value))}
+                        style={{ ...inp, borderColor: "#FCA5A5", background: "#FEF2F2", color: "#DC2626", fontWeight: 700 }}
+                      />
+                    </label>
+                  </div>
+
+                  <div style={{ marginTop: 10 }}>
+                    <label style={lbl}>
+                      Deduction Reason / Audit Note
+                      <input
+                        type="text"
+                        placeholder="Ex: 2 days unexcused absence, Staff loan installment, Late penalty"
+                        value={editMonthDeductionReason}
+                        onChange={(e) => setEditMonthDeductionReason(e.target.value)}
+                        style={inp}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Bank Details Section */}
+                <div style={{ background: "#F8FAFC", padding: 14, borderRadius: 10, border: "1px solid #E2E8F0" }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: "#475569", textTransform: "uppercase", marginBottom: 10, letterSpacing: 0.5 }}>
+                    Bank Account Information
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    <label style={lbl}>
+                      Bank Name
+                      <input
+                        type="text"
+                        placeholder="Ex: GTBank, Zenith, Access"
+                        value={editMonthBankName}
+                        onChange={(e) => setEditMonthBankName(e.target.value)}
+                        style={inp}
+                      />
+                    </label>
+
+                    <label style={lbl}>
+                      Account Number
+                      <input
+                        type="text"
+                        maxLength={10}
+                        placeholder="10 digits"
+                        value={editMonthAccountNumber}
+                        onChange={(e) => setEditMonthAccountNumber(e.target.value)}
+                        style={{ ...inp, fontFamily: "monospace", letterSpacing: 1 }}
+                      />
+                    </label>
+
+                    <label style={lbl}>
+                      Account Name
+                      <input
+                        type="text"
+                        placeholder="Name on bank account"
+                        value={editMonthAccountName}
+                        onChange={(e) => setEditMonthAccountName(e.target.value)}
+                        style={inp}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Payment Status & Net Payout */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "center" }}>
+                  <label style={lbl}>
+                    Monthly Schedule Status
+                    <select
+                      value={editMonthStatus}
+                      onChange={(e) => setEditMonthStatus(e.target.value as any)}
+                      style={{ ...inp, fontWeight: 600 }}
+                    >
+                      <option value="pending">Pending Audit</option>
+                      <option value="approved">Approved for Payment</option>
+                      <option value="paid">Paid & Transferred</option>
+                    </select>
+                  </label>
+
+                  <div style={{ background: "linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)", padding: 12, borderRadius: 10, border: "1px solid #BFDBFE" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#1E40AF", textTransform: "uppercase" }}>Calculated Net Bank Payout</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: "#1E3A8A", marginTop: 2 }}>
+                      ₦{Math.max(0, (Number(editMonthBasic) || 0) + (Number(editMonthAllowances) || 0) - (Number(editMonthDeduction) || 0)).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8, paddingTop: 10, borderTop: "1px solid #E2E8F0" }}>
+                  <button type="button" onClick={() => setEditingMonthRecord(null)} style={{ ...smallBtn, padding: "10px 16px" }}>
+                    Cancel
+                  </button>
+                  <LoaderButton
+                    type="submit"
+                    loading={savingMonthRecord}
+                    style={{ ...btn, background: "#2563EB", padding: "10px 22px", display: "inline-flex", alignItems: "center", gap: 6 }}
+                  >
+                    <Save size={15} /> Save & Lock Month Record
+                  </LoaderButton>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── ID CARD MODAL (CR80 Vertical Layout 54mm × 85.6mm) ──────────── */}
         {showCardModal && previewMembers.length > 0 && (
           <div style={overlayStyle}>
             <div style={modalStyle}>
               {/* Modal header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, borderBottom: "1px solid #E5E7EB", paddingBottom: 16 }}>
                 <div>
-                  <h3 style={{ margin: "0 0 4px" }}>Staff ID Card Preview ({previewMembers.length})</h3>
-                  <p style={{ margin: 0, fontSize: 13, color: "#666" }}>Premium modern design · Front & Back · Print or Download as PDF</p>
+                  <h3 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 800 }}>
+                    Official CR80 Vertical Staff ID Badges ({previewMembers.length})
+                  </h3>
+                  <p style={{ margin: 0, fontSize: 13, color: "#666" }}>
+                    Standard CR80 Portrait Badge (54mm × 85.6mm) · Corporate Layout · High-Res Print & PDF
+                  </p>
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                   <LoaderButton onClick={() => window.print()} style={{ ...btn, padding: "8px 16px", background: "#1F2937", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <Printer size={14} /> Print All
+                    <Printer size={14} /> Print Badges
                   </LoaderButton>
                   <LoaderButton loading={downloadingPdf} onClick={downloadAllAsPdf} style={{ ...btn, padding: "8px 16px", background: "#7C3AED", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <FileDown size={14} /> Download All PDF
+                    <FileDown size={14} /> Download All (PDF)
                   </LoaderButton>
                   <LoaderButton onClick={() => { setShowCardModal(false); setPreviewMembers([]); }} style={{ ...btn, padding: "8px 14px", background: "#EF4444", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6 }}>
                     <X size={14} /> Close
@@ -1183,11 +2035,11 @@ export default function StaffsPage() {
                 </h4>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                   <div style={{ background: "#fff", padding: 10, borderRadius: 8, border: "1px solid #E2E8F0" }}>
-                    <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8, color: "#ff7f50" }}>Passport Photo</div>
+                    <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8, color: "#ff7f50" }}>Passport Photo Position</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, fontSize: 11 }}>
                       <label>X: {cardLayout.photoX}px<input type="range" min="-40" max="40" value={cardLayout.photoX} onChange={(e) => setCardLayout({ ...cardLayout, photoX: +e.target.value })} style={{ width: "100%" }} /></label>
                       <label>Y: {cardLayout.photoY}px<input type="range" min="-30" max="30" value={cardLayout.photoY} onChange={(e) => setCardLayout({ ...cardLayout, photoY: +e.target.value })} style={{ width: "100%" }} /></label>
-                      <label>Size: {cardLayout.photoScale}%<input type="range" min="70" max="180" value={cardLayout.photoScale} onChange={(e) => setCardLayout({ ...cardLayout, photoScale: +e.target.value })} style={{ width: "100%" }} /></label>
+                      <label>Scale: {cardLayout.photoScale}%<input type="range" min="70" max="180" value={cardLayout.photoScale} onChange={(e) => setCardLayout({ ...cardLayout, photoScale: +e.target.value })} style={{ width: "100%" }} /></label>
                     </div>
                   </div>
                   <div style={{ background: "#fff", padding: 10, borderRadius: 8, border: "1px solid #E2E8F0" }}>
@@ -1195,17 +2047,19 @@ export default function StaffsPage() {
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, fontSize: 11 }}>
                       <label>X: {cardLayout.signatureX}px<input type="range" min="-50" max="50" value={cardLayout.signatureX} onChange={(e) => setCardLayout({ ...cardLayout, signatureX: +e.target.value })} style={{ width: "100%" }} /></label>
                       <label>Y: {cardLayout.signatureY}px<input type="range" min="-30" max="30" value={cardLayout.signatureY} onChange={(e) => setCardLayout({ ...cardLayout, signatureY: +e.target.value })} style={{ width: "100%" }} /></label>
-                      <label>Size: {cardLayout.signatureScale}%<input type="range" min="70" max="140" value={cardLayout.signatureScale} onChange={(e) => setCardLayout({ ...cardLayout, signatureScale: +e.target.value })} style={{ width: "100%" }} /></label>
+                      <label>Scale: {cardLayout.signatureScale}%<input type="range" min="70" max="140" value={cardLayout.signatureScale} onChange={(e) => setCardLayout({ ...cardLayout, signatureScale: +e.target.value })} style={{ width: "100%" }} /></label>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Cards */}
+              {/* Cards Grid */}
               <div className="print-area-360" style={{ display: "flex", gap: 36, flexWrap: "wrap", justifyContent: "center" }}>
                 {previewMembers.map((member) => {
                   const verifyUrl = `${API_BASE_URL}/api/staff/${member.$id}/verify`;
                   const attendUrl = `${API_BASE_URL}/api/staff/${member.$id}/attend`;
+                  const empId = member.employeeId || `360-${member.$id.slice(0, 6).toUpperCase()}`;
+
                   return (
                     <div key={member.$id} className="card-wrapper-360" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: 36 }}>
 
@@ -1218,11 +2072,12 @@ export default function StaffsPage() {
                         >
                           <FileDown size={13} /> Download PDF
                         </LoaderButton>
-                        <span style={{ fontSize: 12, color: "#666" }}>{member.name}</span>
+                        <span style={{ fontSize: 12, color: "#666", fontWeight: 600 }}>{member.name}</span>
                       </div>
 
-                      <div style={{ display: "flex", gap: 14 }}>
-                        {/* ───────── FRONT ───────── */}
+                      <div style={{ display: "flex", gap: 16 }}>
+
+                        {/* ───────── FRONT CARD (CR80 Portrait 240px × 384px) ───────── */}
                         <div
                           ref={(el) => {
                             if (!cardRefs.current[member.$id]) cardRefs.current[member.$id] = { front: null, back: null };
@@ -1230,104 +2085,160 @@ export default function StaffsPage() {
                           }}
                           style={frontCardStyle}
                         >
-                          {/* Top holographic line */}
-                          <div style={{ height: 5, background: "linear-gradient(90deg,#1a365d,#ff7f50,#1a365d,#ff7f50,#1a365d)" }} />
+                          {/* Top Lanyard Slot Punch Cutout Marker */}
+                          <div style={{ width: 32, height: 4, borderRadius: 2, background: "rgba(0,0,0,0.12)", margin: "4px auto 2px" }} />
 
-                          {/* Header */}
+                          {/* Top Security Line */}
+                          <div style={{ height: 4, background: "linear-gradient(90deg, #1a365d, #ff7f50, #1a365d, #ff7f50, #1a365d)" }} />
+
+                          {/* Deep Navy Corporate Header */}
                           <div style={{
-                            background: "linear-gradient(135deg,#1a365d 0%,#243b6e 60%,#1d4ed8 100%)",
-                            padding: "9px 10px 7px",
-                            display: "flex", alignItems: "center", gap: 9,
+                            background: "linear-gradient(135deg, #0F172A 0%, #1E293B 70%, #1E3A8A 100%)",
+                            padding: "8px 10px 6px",
+                            display: "flex", alignItems: "center", gap: 8,
+                            borderBottom: "1.5px solid #FF7F50",
                           }}>
-                            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#fff", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#fff", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 2 }}>
                               <img src="/logo.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }}
                                 onError={(e: any) => { e.currentTarget.style.display = "none"; }} />
                             </div>
-                            <div>
-                              <div style={{ fontSize: 9.5, fontWeight: 900, color: "#fff", letterSpacing: 0.3, lineHeight: 1.1 }}>360 DEGREE GLOBAL</div>
-                              <div style={{ fontSize: 8, fontWeight: 700, color: "#ff7f50" }}>ESTATE LTD.</div>
-                              <div style={{ fontSize: 5.5, color: "rgba(255,255,255,0.65)" }}>NSUK 2nd Gate, Keffi · 08038923692</div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 9.5, fontWeight: 900, color: "#FFFFFF", letterSpacing: 0.5, lineHeight: 1.1 }}>
+                                360 DEGREE GLOBAL
+                              </div>
+                              <div style={{ fontSize: 7.5, fontWeight: 800, color: "#FF7F50", letterSpacing: 0.4 }}>
+                                ESTATE LTD.
+                              </div>
+                              <div style={{ fontSize: 5.5, color: "rgba(255,255,255,0.7)", letterSpacing: 0.2 }}>
+                                RC: 1845920 · Real Estate & Infrastructure
+                              </div>
                             </div>
                           </div>
 
-                          {/* Body */}
-                          <div style={{ display: "flex", flex: 1, padding: "10px 10px 8px" }}>
-                            {/* Left column: photo + cardholder sig */}
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 84 }}>
-                              {/* Photo */}
+                          {/* Badge Type Title */}
+                          <div style={{
+                            background: "linear-gradient(90deg, #FF6B4A 0%, #E04826 100%)",
+                            padding: "2.5px 6px", textAlign: "center",
+                          }}>
+                            <div style={{ fontSize: 7, fontWeight: 900, color: "#fff", letterSpacing: 1.2 }}>
+                              STAFF IDENTITY CARD
+                            </div>
+                          </div>
+
+                          {/* Body Content */}
+                          <div style={{ flex: 1, padding: "8px 12px 6px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between" }}>
+
+                            {/* Centered Passport Photo Frame */}
+                            <div style={{
+                              width: 86, height: 104, borderRadius: 8,
+                              overflow: "hidden",
+                              border: "2.5px solid #FF7F50",
+                              boxShadow: "0 4px 14px rgba(255,111,74,0.3)",
+                              background: "#F1F5F9",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              position: "relative",
+                            }}>
+                              {member.photoUrl ? (
+                                <img
+                                  src={member.photoUrl} alt="Staff" crossOrigin="anonymous"
+                                  style={{
+                                    width: "100%", height: "100%", objectFit: "cover",
+                                    transform: `translate(${cardLayout.photoX}px,${cardLayout.photoY}px) scale(${cardLayout.photoScale/100})`,
+                                    transformOrigin: "center center",
+                                  }}
+                                />
+                              ) : <User size={34} color="#CBD5E1" />}
+                            </div>
+
+                            {/* Staff Name & Position Banner */}
+                            <div style={{ textAlign: "center", marginTop: 4, width: "100%" }}>
+                              <div style={{ fontSize: 10.5, fontWeight: 900, color: "#0F172A", letterSpacing: 0.3, lineHeight: 1.2, textTransform: "uppercase" }}>
+                                {member.name}
+                              </div>
                               <div style={{
-                                width: 78, height: 90, borderRadius: 9,
-                                overflow: "hidden", border: "3px solid #ff7f50",
-                                boxShadow: "0 4px 12px rgba(255,127,80,0.35)",
-                                background: "#f0f0f0",
-                                display: "flex", alignItems: "center", justifyContent: "center",
+                                display: "inline-block",
+                                background: "#0F172A",
+                                color: "#FF7F50",
+                                fontSize: 6.5, fontWeight: 800,
+                                padding: "2px 8px", borderRadius: 4,
+                                marginTop: 3, letterSpacing: 0.5,
                               }}>
-                                {member.photoUrl ? (
-                                  <img
-                                    src={member.photoUrl} alt="Staff" crossOrigin="anonymous"
-                                    style={{
-                                      width: "100%", height: "100%", objectFit: "cover",
-                                      transform: `translate(${cardLayout.photoX}px,${cardLayout.photoY}px) scale(${cardLayout.photoScale/100})`,
-                                      transformOrigin: "center center",
-                                    }}
-                                  />
-                                ) : <User size={32} color="#CBD5E1" />}
+                                {(member.position || "OFFICIAL STAFF").toUpperCase()}
+                              </div>
+                            </div>
+
+                            {/* Structured 2-Column Info Grid */}
+                            <div style={{
+                              width: "100%",
+                              background: "#F8FAFC",
+                              border: "1px solid #E2E8F0",
+                              borderRadius: 6,
+                              padding: "4px 8px",
+                              display: "grid",
+                              gridTemplateColumns: "1fr 1fr",
+                              gap: "3px 8px",
+                              marginTop: 4,
+                            }}>
+                              <div>
+                                <div style={{ fontSize: 5, fontWeight: 800, color: "#64748B", textTransform: "uppercase" }}>STAFF ID</div>
+                                <div style={{ fontSize: 7.5, fontWeight: 800, color: "#0F172A", fontFamily: "monospace" }}>{empId}</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: 5, fontWeight: 800, color: "#64748B", textTransform: "uppercase" }}>DEPARTMENT</div>
+                                <div style={{ fontSize: 7, fontWeight: 700, color: "#0F172A" }}>{(member.department || "GENERAL").toUpperCase()}</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: 5, fontWeight: 800, color: "#64748B", textTransform: "uppercase" }}>PHONE</div>
+                                <div style={{ fontSize: 6.5, fontWeight: 700, color: "#0F172A" }}>{member.phone || "—"}</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: 5, fontWeight: 800, color: "#64748B", textTransform: "uppercase" }}>STATUS</div>
+                                <div style={{ fontSize: 6.5, fontWeight: 800, color: member.active ? "#059669" : "#DC2626" }}>
+                                  {member.active ? "ACTIVE" : "INACTIVE"}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Bottom Row: Attendance QR on left + Cardholder Signature on right */}
+                            <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 4 }}>
+                              {/* Left: Attendance QR */}
+                              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                                <img
+                                  src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(attendUrl)}`}
+                                  alt="Attendance QR" crossOrigin="anonymous"
+                                  style={{ width: 34, height: 34, borderRadius: 3, border: "1px solid #CBD5E1", padding: 1, background: "#fff" }}
+                                />
+                                <div style={{ fontSize: 4.5, color: "#64748B", fontWeight: 700 }}>ATTENDANCE QR</div>
                               </div>
 
-                              {/* Cardholder signature */}
+                              {/* Right: Cardholder Signature */}
                               <div style={{
-                                width: 80, borderTop: "1.5px solid #1a365d",
-                                paddingTop: 3, textAlign: "center",
+                                width: 90, textAlign: "center",
                                 transform: `translate(${cardLayout.signatureX}px,${cardLayout.signatureY}px)`,
                               }}>
-                                {member.signatureUrl ? (
-                                  <img src={member.signatureUrl} alt="Sig" crossOrigin="anonymous"
-                                    style={{ height: (18*cardLayout.signatureScale)/100, objectFit: "contain", display: "block", margin: "0 auto" }} />
-                                ) : <div style={{ height: 14 }} />}
-                                <div style={{ fontSize: 5.5, fontWeight: 700, color: "#1a365d" }}>CARDHOLDER SIGNATURE</div>
-                              </div>
-                            </div>
-
-                            {/* Right column: info */}
-                            <div style={{ flex: 1, paddingLeft: 8, display: "flex", flexDirection: "column", gap: 2 }}>
-                              {/* ID badge */}
-                              <div style={{
-                                background: "linear-gradient(90deg,#ff7f50,#e85d25)",
-                                borderRadius: 5, padding: "3px 6px", marginBottom: 5, textAlign: "center",
-                              }}>
-                                <div style={{ fontSize: 7.5, fontWeight: 900, color: "#fff", letterSpacing: 1.2 }}>STAFF IDENTITY CARD</div>
-                              </div>
-
-                              {[
-                                { label: "NAME", value: member.name.toUpperCase(), large: true },
-                                { label: "RANK", value: (member.position || "STAFF").toUpperCase() },
-                                { label: "ID NO.", value: (member.employeeId || member.$id.substring(0,8)).toUpperCase() },
-                                { label: "DEPT", value: (member.department || "GENERAL").toUpperCase() },
-                                { label: "PHONE", value: member.phone || "N/A" },
-                              ].map(({ label, value, large }) => (
-                                <div key={label} style={{ marginBottom: 3 }}>
-                                  <div style={{ fontSize: 6, fontWeight: 800, color: "#ff7f50", letterSpacing: 0.4 }}>{label}</div>
-                                  <div style={{ fontSize: large ? 9 : 7.5, fontWeight: large ? 900 : 700, color: "#1a365d", lineHeight: 1.1 }}>{value}</div>
+                                <div style={{ minHeight: 20, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+                                  {member.signatureUrl ? (
+                                    <img
+                                      src={member.signatureUrl} alt="Cardholder Signature" crossOrigin="anonymous"
+                                      style={{ height: (18 * cardLayout.signatureScale) / 100, objectFit: "contain", display: "block", margin: "0 auto" }}
+                                    />
+                                  ) : <div style={{ height: 16 }} />}
                                 </div>
-                              ))}
-
-                              {/* Attendance QR */}
-                              <div style={{ textAlign: "center", marginTop: "auto" }}>
-                                <img
-                                  src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(attendUrl)}`}
-                                  alt="QR" crossOrigin="anonymous"
-                                  style={{ width: 40, height: 40, borderRadius: 4, border: "1px solid #E5E7EB", padding: 1 }}
-                                />
-                                <div style={{ fontSize: 5, color: "#aaa" }}>SCAN TO ATTEND</div>
+                                <div style={{ borderTop: "1px solid #0F172A", paddingTop: 1 }}>
+                                  <div style={{ fontSize: 5, fontWeight: 800, color: "#0F172A", letterSpacing: 0.3 }}>
+                                    CARDHOLDER SIGNATURE
+                                  </div>
+                                </div>
                               </div>
                             </div>
+
                           </div>
 
-                          {/* Bottom stripe */}
-                          <div style={{ height: 7, background: "linear-gradient(90deg,#1a365d 55%,#ff7f50 100%)" }} />
+                          {/* Bottom Holographic Stripe */}
+                          <div style={{ height: 6, background: "linear-gradient(90deg, #0F172A 50%, #FF7F50 100%)" }} />
                         </div>
 
-                        {/* ───────── BACK ───────── */}
+                        {/* ───────── BACK CARD (CR80 Portrait 240px × 384px) ───────── */}
                         <div
                           ref={(el) => {
                             if (!cardRefs.current[member.$id]) cardRefs.current[member.$id] = { front: null, back: null };
@@ -1335,58 +2246,87 @@ export default function StaffsPage() {
                           }}
                           style={backCardStyle}
                         >
-                          {/* Top holographic */}
-                          <div style={{ height: 5, background: "linear-gradient(90deg,#ff7f50,#1a365d,#ff7f50)" }} />
+                          {/* Top Lanyard Slot Marker */}
+                          <div style={{ width: 32, height: 4, borderRadius: 2, background: "rgba(0,0,0,0.12)", margin: "4px auto 2px" }} />
 
-                          {/* Dark header */}
-                          <div style={{ background: "#1a365d", padding: "7px 10px", textAlign: "center" }}>
-                            <div style={{ fontSize: 7.5, fontWeight: 900, color: "#fff", letterSpacing: 0.4 }}>OFFICIAL IDENTIFICATION CARD</div>
-                            <div style={{ fontSize: 6, color: "#ff7f50", fontWeight: 700 }}>360 DEGREE GLOBAL ESTATE LTD.</div>
+                          {/* Top Security Stripe */}
+                          <div style={{ height: 4, background: "linear-gradient(90deg, #FF7F50, #0F172A, #FF7F50)" }} />
+
+                          {/* Header */}
+                          <div style={{ background: "#0F172A", padding: "6px 8px", textAlign: "center", borderBottom: "1.5px solid #FF7F50" }}>
+                            <div style={{ fontSize: 7, fontWeight: 900, color: "#FFFFFF", letterSpacing: 0.4 }}>OFFICIAL IDENTIFICATION CARD</div>
+                            <div style={{ fontSize: 5.5, color: "#FF7F50", fontWeight: 700 }}>PROPERTY OF 360 DEGREE GLOBAL ESTATE LTD.</div>
                           </div>
 
-                          {/* Body */}
-                          <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "10px 12px", alignItems: "center", justifyContent: "space-between" }}>
-                            {/* Auth text */}
-                            <div style={{ fontSize: 6.5, fontStyle: "italic", color: "#374151", textAlign: "center", lineHeight: 1.4 }}>
-                              This certifies that the bearer is an authorised staff member of 360 Degree Global Estate Ltd. and is entitled to all privileges accorded to same.
+                          {/* Body Content */}
+                          <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "8px 12px 6px", alignItems: "center", justifyContent: "space-between" }}>
+
+                            {/* Terms of Authorization */}
+                            <div style={{
+                              fontSize: 5.5, color: "#334155", textAlign: "center", lineHeight: 1.35,
+                              background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 6, padding: "5px 6px",
+                            }}>
+                              This card certifies that the bearer is an authorized staff member of <strong>360 Degree Global Estate Ltd.</strong> and is entitled to all official privileges accorded to same. Must be surrendered upon termination of employment or request.
                             </div>
 
-                            {/* Verification QR */}
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                              <div style={{ fontSize: 6, fontWeight: 800, color: "#1a365d", letterSpacing: 0.5 }}>SCAN TO VERIFY STAFF</div>
+                            {/* Centered High-Contrast Verification QR */}
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                              <div style={{ fontSize: 5.5, fontWeight: 900, color: "#0F172A", letterSpacing: 0.5 }}>
+                                SCAN TO VERIFY AUTHENTICITY
+                              </div>
                               <img
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(verifyUrl)}`}
-                                alt="Verify QR" crossOrigin="anonymous"
-                                style={{ width: 72, height: 72, border: "2.5px solid #ff7f50", borderRadius: 7, padding: 3, background: "#fff" }}
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(verifyUrl)}`}
+                                alt="Verification QR" crossOrigin="anonymous"
+                                style={{
+                                  width: 62, height: 62,
+                                  border: "2px solid #FF7F50",
+                                  borderRadius: 6, padding: 2, background: "#fff",
+                                  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                                }}
                               />
                             </div>
 
-                            {/* Director signature */}
+                            {/* CEO / Managing Director Signature */}
                             <div style={{ width: "100%", textAlign: "center" }}>
-                              <div style={{ width: 100, margin: "0 auto 2px", borderBottom: "1.5px solid #1a365d", minHeight: 26, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+                              <div style={{
+                                width: 110, margin: "0 auto 2px",
+                                borderBottom: "1.5px solid #0F172A",
+                                minHeight: 24, display: "flex", alignItems: "flex-end", justifyContent: "center",
+                              }}>
                                 {directorSigUrl && (
-                                  <img src={directorSigUrl} alt="Director Sig" crossOrigin="anonymous"
-                                    style={{ maxHeight: 24, objectFit: "contain" }} />
+                                  <img
+                                    src={directorSigUrl} alt="Managing Director Signature" crossOrigin="anonymous"
+                                    style={{ maxHeight: 24, objectFit: "contain" }}
+                                  />
                                 )}
                               </div>
-                              <div style={{ fontSize: 6.5, fontWeight: 800, color: "#1a365d" }}>Managing Director / CEO</div>
+                              <div style={{ fontSize: 6.5, fontWeight: 900, color: "#0F172A" }}>ENGR. ABBAS MODIBBO</div>
+                              <div style={{ fontSize: 5.5, fontWeight: 700, color: "#64748B" }}>Managing Director / CEO</div>
                             </div>
 
-                            {/* Lost notice */}
-                            <div style={{ fontSize: 5.5, fontStyle: "italic", color: "#9CA3AF", textAlign: "center", lineHeight: 1.3 }}>
-                              If found, please return to 360 Degree Global Estate Ltd. or nearest Police Station.
+                            {/* Return Notice & Police Station */}
+                            <div style={{ fontSize: 5, fontStyle: "italic", color: "#64748B", textAlign: "center", lineHeight: 1.3 }}>
+                              If found, please return to 360 Degree Global Estate Ltd., NSUK 2nd Gate, Keffi, Nasarawa State, or the nearest Police Station. Tel: 08038923692
                             </div>
 
-                            {/* Barcode */}
+                            {/* Barcode Stripe with Staff ID */}
                             <div style={{ width: "100%", marginTop: 2 }}>
-                              <div style={{ height: 14, background: "repeating-linear-gradient(90deg,#000 0,#000 1px,#fff 1px,#fff 2px)", width: "78%", margin: "0 auto" }} />
-                              <div style={{ fontSize: 5.5, letterSpacing: 2, color: "#444", textAlign: "center", marginTop: 1 }}>*{member.$id.substring(0,10).toUpperCase()}*</div>
+                              <div style={{
+                                height: 12,
+                                background: "repeating-linear-gradient(90deg, #000 0, #000 1.5px, #fff 1.5px, #fff 3px)",
+                                width: "82%", margin: "0 auto",
+                              }} />
+                              <div style={{ fontSize: 5, letterSpacing: 2, color: "#334155", textAlign: "center", marginTop: 1, fontFamily: "monospace", fontWeight: 700 }}>
+                                *{empId}*
+                              </div>
                             </div>
+
                           </div>
 
-                          {/* Bottom stripe */}
-                          <div style={{ height: 7, background: "linear-gradient(90deg,#ff7f50 0%,#1a365d 40%)" }} />
+                          {/* Bottom Holographic Stripe */}
+                          <div style={{ height: 6, background: "linear-gradient(90deg, #FF7F50 0%, #0F172A 60%)" }} />
                         </div>
+
                       </div>
                     </div>
                   );
@@ -1403,7 +2343,7 @@ export default function StaffsPage() {
 // ─── Shared Styles ────────────────────────────────────────────────────────────
 const overlayStyle: React.CSSProperties = {
   position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-  backgroundColor: "rgba(0,0,0,0.65)", display: "flex",
+  backgroundColor: "rgba(15, 23, 42, 0.75)", display: "flex",
   justifyContent: "center", alignItems: "flex-start",
   zIndex: 1000, backdropFilter: "blur(6px)",
   overflowY: "auto", padding: "20px 0",
@@ -1416,19 +2356,21 @@ const modalStyle: React.CSSProperties = {
 };
 
 const frontCardStyle: React.CSSProperties = {
-  width: 222, height: 350, backgroundColor: "#fff",
-  borderRadius: 13, overflow: "hidden",
-  boxShadow: "0 8px 28px rgba(0,0,0,0.18)",
+  width: 240, height: 384, backgroundColor: "#ffffff",
+  borderRadius: 14, overflow: "hidden",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
   display: "flex", flexDirection: "column",
-  border: "1px solid rgba(0,0,0,0.07)",
+  border: "1px solid rgba(0,0,0,0.08)",
+  position: "relative",
 };
 
 const backCardStyle: React.CSSProperties = {
-  width: 222, height: 350, backgroundColor: "#fff",
-  borderRadius: 13, overflow: "hidden",
-  boxShadow: "0 8px 28px rgba(0,0,0,0.18)",
+  width: 240, height: 384, backgroundColor: "#ffffff",
+  borderRadius: 14, overflow: "hidden",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
   display: "flex", flexDirection: "column",
-  border: "1px solid rgba(0,0,0,0.07)",
+  border: "1px solid rgba(0,0,0,0.08)",
+  position: "relative",
 };
 
 const card: React.CSSProperties = {

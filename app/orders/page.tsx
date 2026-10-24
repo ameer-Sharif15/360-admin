@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { getClients, Query, type Models } from "../../lib/appwrite";
 import { API_BASE_URL } from "../../lib/api";
+import { io, Socket } from "socket.io-client";
 import LoaderButton from "../../components/LoaderButton";
 import {
   RefreshCw,
@@ -32,6 +33,7 @@ import {
   Compass,
   CheckCircle2,
   XCircle,
+  Send,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -55,6 +57,9 @@ type OrderItem = {
 type Order = {
   $id: string;
   _id?: string;
+  id?: string;
+  chat?: any;
+  chatId?: string;
   $createdAt?: string;
   userId?: string;
   userName?: string;
@@ -78,13 +83,15 @@ type Order = {
   chatSummary?: string;
   deliveryAddress?: string;
   orderDetails?: any;
+  [key: string]: any;
 };
 
 type ChatMessage = {
   _id: string;
   content: string;
-  sender?: { name?: string; role?: string; displayName?: string };
+  sender?: { name?: string; role?: string; displayName?: string; username?: string; [key: string]: any };
   createdAt?: string;
+  [key: string]: any;
 };
 
 const COLLECTION = "orders";
@@ -303,97 +310,326 @@ export default function OrdersPage() {
   const [loadingChat, setLoadingChat]     = useState(false);
   const [updatingId, setUpdatingId]       = useState<string | null>(null);
   const [deletingId, setDeletingId]       = useState<string | null>(null);
+  const [liveConnected, setLiveConnected] = useState(false);
+  const [newOrderBadge, setNewOrderBadge] = useState(0);
+  const [newOrderMsgText, setNewOrderMsgText] = useState("");
+  const [sendingOrderMsg, setSendingOrderMsg] = useState(false);
+  const [successMsg, setSuccessMsg]       = useState<string | null>(null);
+
+  const socketRef = useRef<Socket | null>(null);
+  const selectedOrderRef = useRef<Order | null>(null);
+
+  useEffect(() => {
+    selectedOrderRef.current = selectedOrder;
+  }, [selectedOrder]);
 
   const clientBundle = useMemo(() => {
     try { return getClients(); }
     catch (e: any) { setError(e.message); return null; }
   }, []);
 
-  const fetchOrders = async () => {
-    if (!clientBundle) return;
+  const fetchOrders = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const queries: any[] = [Query.orderDesc("$createdAt")];
-      if (statusFilter !== "all") queries.push(Query.equal("status", statusFilter));
-      const res = await clientBundle.databases.listDocuments<Order & Models.Document>(
-        clientBundle.databaseId, COLLECTION, queries
-      );
-      setOrders(res.documents);
-    } catch (e: any) { setError(e.message); }
-    finally { setLoading(false); }
-  };
+      // 1. Fetch from MongoDB backend API
+      let backendOrders: any[] = [];
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("admin_jwt") : null;
+        const url = `${API_BASE_URL}/api/orders${statusFilter !== "all" ? `?status=${statusFilter}` : ""}`;
+        const res = await fetch(url, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const data = await res.json();
+          backendOrders = Array.isArray(data) ? data : (data.documents || []);
+        }
+      } catch (err) {
+        console.warn("Backend orders fetch notice:", err);
+      }
 
-  useEffect(() => { fetchOrders(); }, [statusFilter, clientBundle]);
+      // 2. Fetch from Appwrite if available
+      let appwriteOrders: any[] = [];
+      if (clientBundle) {
+        try {
+          const queries: any[] = [Query.orderDesc("$createdAt")];
+          if (statusFilter !== "all") queries.push(Query.equal("status", statusFilter));
+          const res = await clientBundle.databases.listDocuments<Order & Models.Document>(
+            clientBundle.databaseId, COLLECTION, queries
+          );
+          appwriteOrders = res.documents || [];
+        } catch (_) {}
+      }
+
+      // Merge backend and Appwrite orders by unique ID
+      const orderMap = new Map<string, any>();
+      [...backendOrders, ...appwriteOrders].forEach((o: any) => {
+        const key = o.$id || o._id || o.id;
+        if (key && !orderMap.has(key)) {
+          orderMap.set(key, { ...o, $id: key });
+        }
+      });
+
+      const merged = Array.from(orderMap.values());
+      // Sort newest first
+      merged.sort((a: any, b: any) => {
+        const tA = new Date(a.$createdAt || a.createdAt || 0).getTime();
+        const tB = new Date(b.$createdAt || b.createdAt || 0).getTime();
+        return tB - tA;
+      });
+
+      setOrders(merged);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter, clientBundle]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  // ─── Real-Time Socket Connection (No Refresh Needed) ────────────────────────
+  useEffect(() => {
+    let socket: Socket | null = null;
+    try {
+      socket = io(API_BASE_URL, {
+        transports: ["websocket", "polling"],
+        reconnectionAttempts: 15,
+        reconnectionDelay: 2000,
+      });
+      socketRef.current = socket;
+
+      socket.on("connect", () => {
+        setLiveConnected(true);
+        socket?.emit("join_channel", "admin_channel");
+        socket?.emit("join_channel", "support_channel");
+      });
+
+      socket.on("disconnect", () => {
+        setLiveConnected(false);
+      });
+
+      // 🛎️ Real-Time: New Order Created
+      socket.on("new_order", (newOrder: any) => {
+        if (!newOrder) return;
+        const normalized = { ...newOrder, $id: newOrder.$id || newOrder._id || newOrder.id };
+        setOrders((prev) => {
+          const exists = prev.some((o) => (o.$id || o._id) === normalized.$id);
+          if (exists) return prev;
+          return [normalized, ...prev];
+        });
+        setNewOrderBadge((count) => count + 1);
+        setSuccessMsg(`🛎️ New Order #${String(normalized.$id).slice(-6).toUpperCase()} received!`);
+      });
+
+      // 🔄 Real-Time: Order Status or Details Updated
+      socket.on("order_updated", (updated: any) => {
+        if (!updated) return;
+        const normalized = { ...updated, $id: updated.$id || updated._id || updated.id };
+        setOrders((prev) =>
+          prev.map((o) => (o.$id === normalized.$id || o._id === normalized.$id ? { ...o, ...normalized } : o))
+        );
+        setSelectedOrder((curr) => {
+          if (curr && (curr.$id === normalized.$id || curr._id === normalized.$id)) {
+            return { ...curr, ...normalized };
+          }
+          return curr;
+        });
+      });
+
+      // 💬 Real-Time: Order Chat Messages
+      socket.on("order_chat_message", ({ orderId, message }: any) => {
+        if (selectedOrderRef.current && (selectedOrderRef.current.$id === orderId || selectedOrderRef.current._id === orderId)) {
+          setChatMessages((prev) => {
+            const exists = prev.some((m) => m._id === message._id);
+            if (exists) return prev;
+            return [...prev, message];
+          });
+        }
+      });
+
+      socket.on("new_message", (message: any) => {
+        if (selectedOrderRef.current) {
+          const targetChatId = selectedOrderRef.current.chat?._id || selectedOrderRef.current.chat || selectedOrderRef.current.chatId;
+          const msgChatId = (message.chat as any)?._id || message.chat;
+          if (targetChatId && String(targetChatId) === String(msgChatId)) {
+            setChatMessages((prev) => {
+              const exists = prev.some((m) => m._id === message._id);
+              if (exists) return prev;
+              return [...prev, message];
+            });
+          }
+        }
+      });
+    } catch (err) {
+      console.warn("Socket initialization failed:", err);
+    }
+
+    return () => {
+      if (socket) {
+        socket.disconnect();
+      }
+    };
+  }, []);
 
   // Fetch chat summary for selected order
   const fetchOrderChat = async (order: Order) => {
-    const cust = getCustomerInfo(order);
-    if (!cust.userId && !order.userId) return;
+    const orderId = order.$id || order._id || order.id;
+    if (!orderId) return;
     setLoadingChat(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/chats/order/${order.$id}/messages`, {
-        headers: { "Content-Type": "application/json" },
-      });
+      const token = typeof window !== "undefined" ? localStorage.getItem("admin_jwt") : null;
+      const headers: any = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      let res = await fetch(`${API_BASE_URL}/api/orders/${orderId}/messages`, { headers });
+      if (!res.ok) {
+        res = await fetch(`${API_BASE_URL}/api/chats/order/${orderId}/messages`, { headers });
+      }
+
       if (res.ok) {
         const data = await res.json();
-        setChatMessages(Array.isArray(data) ? data.slice(0, 25) : data.messages?.slice(0, 25) || []);
+        setChatMessages(Array.isArray(data) ? data : data.messages || []);
       } else {
         setChatMessages([]);
       }
-    } catch { setChatMessages([]); }
-    finally { setLoadingChat(false); }
+    } catch {
+      setChatMessages([]);
+    } finally {
+      setLoadingChat(false);
+    }
+  };
+
+  const handleSendOrderMessage = async () => {
+    if (!newOrderMsgText.trim() || !selectedOrder) return;
+    const orderId = selectedOrder.$id || selectedOrder._id;
+    setSendingOrderMsg(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("admin_jwt") : null;
+      const res = await fetch(`${API_BASE_URL}/api/orders/${orderId}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ content: newOrderMsgText.trim() }),
+      });
+      if (res.ok) {
+        const msg = await res.json();
+        setChatMessages((prev) => [...prev, msg]);
+        setNewOrderMsgText("");
+      }
+    } catch (e: any) {
+      console.warn("Could not post order message:", e);
+    } finally {
+      setSendingOrderMsg(false);
+    }
   };
 
   const openOrderDetail = async (order: Order) => {
+    const orderId = order.$id || order._id || order.id;
     setSelectedOrder(order);
     setChatMessages([]);
     fetchOrderChat(order);
 
-    // Fresh live database fetch from MongoDB for this specific order
-    if (clientBundle) {
-      setLoadingDetails(true);
-      try {
+    // Join order chat room on socket
+    const targetChatId = order.chat?._id || order.chat || order.chatId;
+    if (socketRef.current && targetChatId) {
+      socketRef.current.emit("join_chat", String(targetChatId));
+    }
+
+    // Fresh live fetch from backend or Appwrite
+    setLoadingDetails(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("admin_jwt") : null;
+      const res = await fetch(`${API_BASE_URL}/api/orders/${orderId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const fresh = await res.json();
+        if (fresh) setSelectedOrder({ ...order, ...fresh, $id: orderId });
+      } else if (clientBundle) {
         const fresh = await clientBundle.databases.getDocument<Order & Models.Document>(
-          clientBundle.databaseId,
-          COLLECTION,
-          order.$id
+          clientBundle.databaseId, COLLECTION, orderId
         );
-        if (fresh) {
-          setSelectedOrder(fresh);
-        }
-      } catch (err) {
-        console.warn("Could not refetch single order details:", err);
-      } finally {
-        setLoadingDetails(false);
+        if (fresh) setSelectedOrder(fresh);
       }
+    } catch (err) {
+      console.warn("Could not refetch single order details:", err);
+    } finally {
+      setLoadingDetails(false);
     }
   };
 
   const handleStatusUpdate = async (orderId: string, newStatus: Order["status"]) => {
-    if (!clientBundle) return;
     setUpdatingId(orderId);
     try {
-      await clientBundle.databases.updateDocument(
-        clientBundle.databaseId, COLLECTION, orderId, { status: newStatus }
+      // 1. Update in Backend API (MongoDB)
+      const token = typeof window !== "undefined" ? localStorage.getItem("admin_jwt") : null;
+      try {
+        await fetch(`${API_BASE_URL}/api/orders/${orderId}/status`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ status: newStatus }),
+        });
+      } catch (_) {}
+
+      // 2. Also update in Appwrite if available
+      if (clientBundle) {
+        try {
+          await clientBundle.databases.updateDocument(
+            clientBundle.databaseId, COLLECTION, orderId, { status: newStatus }
+          );
+        } catch (_) {}
+      }
+
+      // Update state immediately without requiring manual refresh
+      setOrders((prev) =>
+        prev.map((o) => (o.$id === orderId || o._id === orderId ? { ...o, status: newStatus } : o))
       );
-      await fetchOrders();
-      if (selectedOrder?.$id === orderId) {
+      if (selectedOrder?.$id === orderId || selectedOrder?._id === orderId) {
         setSelectedOrder((prev) => prev ? { ...prev, status: newStatus } : null);
       }
-    } catch (e: any) { setError(e.message); }
-    finally { setUpdatingId(null); }
+      setSuccessMsg(`Order status updated to "${newStatus}" in real-time.`);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
   const handleDelete = async (orderId: string) => {
     if (!confirm("Delete this order permanently from the database?")) return;
-    if (!clientBundle) return;
     setDeletingId(orderId);
     try {
-      await clientBundle.databases.deleteDocument(clientBundle.databaseId, COLLECTION, orderId);
-      if (selectedOrder?.$id === orderId) setSelectedOrder(null);
-      await fetchOrders();
-    } catch (e: any) { setError(e.message); }
-    finally { setDeletingId(null); }
+      const token = typeof window !== "undefined" ? localStorage.getItem("admin_jwt") : null;
+      try {
+        await fetch(`${API_BASE_URL}/api/orders/${orderId}`, {
+          method: "DELETE",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+      } catch (_) {}
+
+      if (clientBundle) {
+        try {
+          await clientBundle.databases.deleteDocument(clientBundle.databaseId, COLLECTION, orderId);
+        } catch (_) {}
+      }
+
+      setOrders((prev) => prev.filter((o) => o.$id !== orderId && o._id !== orderId));
+      if (selectedOrder?.$id === orderId || selectedOrder?._id === orderId) {
+        setSelectedOrder(null);
+      }
+      setSuccessMsg("Order deleted successfully.");
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   // Search + type filter (client-side)
@@ -420,6 +656,7 @@ export default function OrdersPage() {
       <style>{`
         @keyframes ordSpin { to { transform: rotate(360deg); } }
         @keyframes ordSlide { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes livePulse { 0% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.8; } }
         .ord-card { animation: ordSlide 0.25s ease; }
         .ord-detail-panel { animation: ordSlide 0.2s ease; }
 
@@ -452,7 +689,34 @@ export default function OrdersPage() {
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="ord-header-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <h2 style={{ margin: "0 0 4px", fontSize: 24, fontWeight: 800, color: "#111827" }}>Orders Management</h2>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+              <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: "#111827" }}>Orders Management</h2>
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                background: liveConnected ? "#DCFCE7" : "#FEE2E2",
+                color: liveConnected ? "#166534" : "#991B1B",
+                padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700,
+              }}>
+                <span style={{
+                  width: 7, height: 7, borderRadius: "50%",
+                  background: liveConnected ? "#22C55E" : "#EF4444",
+                  animation: liveConnected ? "livePulse 2s infinite" : "none",
+                }} />
+                {liveConnected ? "LIVE · Auto-sync active" : "Connecting..."}
+              </div>
+              {newOrderBadge > 0 && (
+                <button
+                  onClick={() => { setNewOrderBadge(0); fetchOrders(); }}
+                  style={{
+                    background: "#FF7F50", color: "#fff", border: "none",
+                    borderRadius: 999, padding: "3px 10px", fontSize: 11, fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  +{newOrderBadge} New
+                </button>
+              )}
+            </div>
             <p style={{ margin: 0, color: "#6B7280", fontSize: 14 }}>
               {filteredOrders.length} of {orders.length} orders · ₦{totalRevenue.toLocaleString()} revenue (completed)
             </p>
@@ -466,6 +730,20 @@ export default function OrdersPage() {
             Refresh
           </button>
         </div>
+
+        {/* Success Alert Banner */}
+        {successMsg && (
+          <div style={{
+            background: "#ECFDF5", border: "1px solid #A7F3D0", color: "#065F46",
+            padding: "10px 16px", borderRadius: 10, fontSize: 13, fontWeight: 700,
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+          }}>
+            <span>{successMsg}</span>
+            <button onClick={() => setSuccessMsg(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#065F46" }}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
 
         {/* ── Stats Row ──────────────────────────────────────────────────── */}
         <div className="ord-stat-row" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
@@ -964,37 +1242,78 @@ export default function OrdersPage() {
                   </div>
                 </Section>
 
-                {/* Chat Summary */}
-                <Section title="Order Chat Messages" icon={<MessageSquare size={14} color="#1A365D" />}>
+                {/* Chat Summary & Live Messages */}
+                <Section title="Order Review & Chat Messages" icon={<MessageSquare size={14} color="#1A365D" />}>
                   {loadingChat ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, color: "#888" }}>
-                      <RefreshCw size={14} style={{ animation: "ordSpin 1s linear infinite" }} /> Loading messages from chat…
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: 14, color: "#888", fontSize: 13 }}>
+                      <RefreshCw size={14} style={{ animation: "ordSpin 1s linear infinite" }} /> Fetching order conversation…
                     </div>
                   ) : chatMessages.length === 0 ? (
-                    <div style={{ fontSize: 13, color: "#9CA3AF", fontStyle: "italic", padding: "8px 0" }}>
-                      No chat messages logged for this order.
+                    <div style={{ fontSize: 13, color: "#9CA3AF", fontStyle: "italic", padding: "10px 0" }}>
+                      No chat messages logged for this order yet. Send a message below to initiate review.
                     </div>
                   ) : (
-                    <div style={{ display: "grid", gap: 8, maxHeight: 260, overflowY: "auto" }}>
-                      {chatMessages.map((msg, i) => (
-                        <div key={msg._id || i} style={{
-                          padding: "8px 12px", borderRadius: 10,
-                          background: msg.sender?.role === "staff" ? "#EFF6FF" : "#F9FAFB",
-                          borderLeft: `3px solid ${msg.sender?.role === "staff" ? "#3B82F6" : "#E5E7EB"}`,
-                        }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: msg.sender?.role === "staff" ? "#2563EB" : "#374151", marginBottom: 2 }}>
-                            {msg.sender?.displayName || msg.sender?.name || "Customer"} {msg.sender?.role ? `(${msg.sender.role})` : ""}
-                          </div>
-                          <div style={{ fontSize: 13, color: "#1F2937", lineHeight: 1.4 }}>{msg.content}</div>
-                          {msg.createdAt && (
-                            <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 3 }}>
-                              {new Date(msg.createdAt).toLocaleString()}
+                    <div style={{ display: "grid", gap: 8, maxHeight: 280, overflowY: "auto", paddingRight: 4 }}>
+                      {chatMessages.map((msg, i) => {
+                        const isStaff = msg.sender?.role === "staff" || msg.sender?.role === "admin" || msg.sender?.role === "super_admin";
+                        return (
+                          <div key={msg._id || i} style={{
+                            padding: "9px 12px", borderRadius: 10,
+                            background: isStaff ? "#EFF6FF" : "#F9FAFB",
+                            borderLeft: `3px solid ${isStaff ? "#3B82F6" : "#E5E7EB"}`,
+                          }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: isStaff ? "#2563EB" : "#374151" }}>
+                                {msg.sender?.displayName || msg.sender?.name || msg.sender?.username || (isStaff ? "Admin / Staff" : "Customer")}
+                                {msg.sender?.role ? ` (${msg.sender.role})` : ""}
+                              </span>
+                              {msg.createdAt && (
+                                <span style={{ fontSize: 10, color: "#9CA3AF" }}>
+                                  {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      ))}
+                            <div style={{ fontSize: 13, color: "#1F2937", lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
+                              {msg.content}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
+
+                  {/* Interactive Reply Input Bar */}
+                  <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: "1px solid #E5E7EB" }}>
+                    <input
+                      type="text"
+                      value={newOrderMsgText}
+                      onChange={(e) => setNewOrderMsgText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendOrderMessage();
+                        }
+                      }}
+                      placeholder="Type a message to customer / support…"
+                      style={{
+                        flex: 1, padding: "8px 12px", borderRadius: 8,
+                        border: "1px solid #D1D5DB", fontSize: 13, outline: "none",
+                      }}
+                    />
+                    <LoaderButton
+                      onClick={handleSendOrderMessage}
+                      loading={sendingOrderMsg}
+                      disabled={!newOrderMsgText.trim() || sendingOrderMsg}
+                      style={{
+                        padding: "8px 14px", borderRadius: 8,
+                        background: newOrderMsgText.trim() ? "#1A365D" : "#9CA3AF",
+                        color: "#fff", display: "inline-flex", alignItems: "center", gap: 6,
+                        fontSize: 13, cursor: newOrderMsgText.trim() ? "pointer" : "not-allowed",
+                      }}
+                    >
+                      <Send size={13} /> Send
+                    </LoaderButton>
+                  </div>
                 </Section>
               </div>
             </div>
