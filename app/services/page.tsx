@@ -4,6 +4,7 @@ import { ID, type Models } from '../../lib/appwrite';
 import { useEffect, useMemo, useState } from 'react';
 import { getClients } from '../../lib/appwrite';
 import { uploadToCloudinary } from '../../lib/cloudinary';
+import LoaderButton from '../../components/LoaderButton';
 
 type Service = {
   $id: string;
@@ -22,6 +23,8 @@ const COLLECTION = 'services';
 export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<Service>>({ branchId: '', imageUrl: '' });
@@ -64,7 +67,7 @@ export default function ServicesPage() {
       setError('Name is required');
       return;
     }
-    setLoading(true);
+    setSubmitting(true);
     setError(null);
     try {
       let imageUrl = form.imageUrl || '';
@@ -94,7 +97,7 @@ export default function ServicesPage() {
     } catch (e: any) {
       setError(e.message);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -117,7 +120,7 @@ export default function ServicesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this service?')) return;
     if (!clientBundle) return;
-    setLoading(true);
+    setDeletingId(id);
     setError(null);
     try {
       await clientBundle.databases.deleteDocument(clientBundle.databaseId, COLLECTION, id);
@@ -125,16 +128,24 @@ export default function ServicesPage() {
     } catch (e: any) {
       setError(e.message);
     } finally {
-      setLoading(false);
+      setDeletingId(null);
     }
   };
 
   return (
     <div style={{ display: 'grid', gap: 24 }}>
+      <style>{`
+        .service-form-grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
+        .service-cards-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+        @media(max-width: 640px) {
+          .service-form-grid { grid-template-columns: 1fr !important; }
+          .service-cards-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
       <div style={{ background: '#fff', padding: 24, borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
         <h2 style={{ marginTop: 0 }}>{editingId ? 'Edit Service' : 'Create Service'}</h2>
         {error && <p style={{ color: 'red', background: '#fee2e2', padding: 12, borderRadius: 8 }}>{error}</p>}
-        <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr 1fr' }}>
+        <div className="service-form-grid">
           <input
             placeholder='Service Name'
             value={form.name || ''}
@@ -184,10 +195,10 @@ export default function ServicesPage() {
           </div>
         </div>
         
-        <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
-          <button onClick={handleSubmit} disabled={loading} style={buttonStyle}>
-            {loading ? 'Saving...' : editingId ? 'Update Service' : 'Save Service'}
-          </button>
+        <div style={{ display: 'flex', gap: 12, marginTop: 24, alignItems: 'center' }}>
+          <LoaderButton onClick={handleSubmit} loading={submitting} variant="primary">
+            {submitting ? 'Saving...' : editingId ? 'Update Service' : 'Save Service'}
+          </LoaderButton>
           {editingId && (
             <button onClick={resetForm} style={{ ...buttonStyle, background: '#6B7280' }}>
               Cancel
@@ -196,7 +207,7 @@ export default function ServicesPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))' }}>
+      <div className="service-cards-grid">
         {services.map((svc) => (
           <div key={svc.$id} style={{ background: '#fff', padding: 20, borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
             <div style={{ display: 'flex', gap: 16 }}>
@@ -215,9 +226,16 @@ export default function ServicesPage() {
                 {svc.icon && <span style={{ fontSize: 11, background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>Icon: {svc.icon}</span>}
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16, alignItems: 'center' }}>
               <button onClick={() => handleEdit(svc)} style={smallButtonStyle}>Edit</button>
-              <button onClick={() => handleDelete(svc.$id)} style={{ ...smallButtonStyle, background: '#fee2e2', color: '#EF4444' }}>Delete</button>
+              <LoaderButton
+                variant="danger"
+                size="sm"
+                loading={deletingId === svc.$id}
+                onClick={() => handleDelete(svc.$id)}
+              >
+                {deletingId === svc.$id ? 'Deleting...' : 'Delete'}
+              </LoaderButton>
             </div>
           </div>
         ))}

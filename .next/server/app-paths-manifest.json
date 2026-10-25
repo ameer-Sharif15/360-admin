@@ -1,7 +1,0 @@
-{
-  "/minimart/page": "app/minimart/page.js",
-  "/services/page": "app/services/page.js",
-  "/activities/page": "app/activities/page.js",
-  "/attendance/page": "app/attendance/page.js",
-  "/staffs/page": "app/staffs/page.js"
-}

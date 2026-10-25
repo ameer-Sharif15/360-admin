@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { getClients, ID, Query, type Models } from "../../lib/appwrite";
 
 import { uploadToCloudinary } from "../../lib/cloudinary";
+import LoaderButton from "../../components/LoaderButton";
 
 type MinimartItem = {
   $id: string;
@@ -23,6 +24,8 @@ export default function MinimartPage() {
   const [items, setItems] = useState<MinimartItem[]>([]);
   const [sellers, setSellers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -83,7 +86,8 @@ export default function MinimartPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientBundle) return;
-    setLoading(true);
+    setSubmitting(true);
+    setError(null);
     try {
       const { databases, databaseId, COLLECTIONS } = clientBundle;
 
@@ -125,7 +129,7 @@ export default function MinimartPage() {
     } catch (e: any) {
       setError(e.message);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -153,7 +157,8 @@ export default function MinimartPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this item?")) return;
     if (!clientBundle) return;
-    setLoading(true);
+    setDeletingId(id);
+    setError(null);
     try {
       const { databases, databaseId, COLLECTIONS } = clientBundle;
       await databases.deleteDocument(
@@ -165,17 +170,27 @@ export default function MinimartPage() {
     } catch (e: any) {
       setError(e.message);
     } finally {
-      setLoading(false);
+      setDeletingId(null);
     }
   };
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
+      <style>{`
+        .minimart-form-grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
+        .minimart-name-stock-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+        @media(max-width: 640px) {
+          .minimart-form-grid { grid-template-columns: 1fr !important; }
+          .minimart-name-stock-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
       <header
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
         <h2 style={{ margin: 0 }}>Minimart Inventory</h2>
@@ -206,16 +221,10 @@ export default function MinimartPage() {
       {showForm && (
         <form onSubmit={handleSubmit} style={cardStyle}>
           <h3>{editingId ? "Edit Item" : "New Item"}</h3>
-          <div
-            style={{ display: "grid", gap: 16, gridTemplateColumns: "1fr 1fr" }}
-          >
+          <div className="minimart-form-grid">
             <div
-              style={{
-                gridColumn: "span 2",
-                display: "grid",
-                gridTemplateColumns: "2fr 1fr",
-                gap: 16,
-              }}
+              className="minimart-name-stock-grid"
+              style={{ gridColumn: "span 2" }}
             >
               <div>
                 <label
@@ -422,17 +431,28 @@ export default function MinimartPage() {
               />
             </div>
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            style={{ ...buttonStyle, marginTop: 24 }}
-          >
-            {loading
-              ? "Processing..."
-              : editingId
-                ? "Update Item"
-                : "Add to Inventory"}
-          </button>
+          <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
+            <LoaderButton
+              type="submit"
+              loading={submitting}
+              variant="primary"
+            >
+              {submitting
+                ? "Processing..."
+                : editingId
+                  ? "Update Item"
+                  : "Add to Inventory"}
+            </LoaderButton>
+            {editingId && (
+              <button
+                type="button"
+                onClick={resetForm}
+                style={{ ...smallButtonStyle, padding: "12px 20px" }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </form>
       )}
 
@@ -525,20 +545,18 @@ export default function MinimartPage() {
               </span>
             </div>
 
-            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+            <div style={{ display: "flex", gap: 8, marginTop: 20, alignItems: "center" }}>
               <button onClick={() => handleEdit(item)} style={smallButtonStyle}>
                 Edit
               </button>
-              <button
+              <LoaderButton
+                variant="danger"
+                size="sm"
+                loading={deletingId === item.$id}
                 onClick={() => handleDelete(item.$id)}
-                style={{
-                  ...smallButtonStyle,
-                  background: "#fee2e2",
-                  color: "#EF4444",
-                }}
               >
-                Delete
-              </button>
+                {deletingId === item.$id ? "Deleting..." : "Delete"}
+              </LoaderButton>
             </div>
           </div>
         ))}

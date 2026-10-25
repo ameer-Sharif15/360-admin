@@ -4,6 +4,7 @@ import { ID, Query, type Models } from '../../lib/appwrite';
 import { useEffect, useMemo, useState } from 'react';
 import { getClients } from '../../lib/appwrite';
 import { uploadToCloudinary } from '../../lib/cloudinary';
+import LoaderButton from '../../components/LoaderButton';
 
 type Activity = {
   $id: string;
@@ -20,6 +21,8 @@ const COLLECTION_KEY = 'ACTIVITIES_HOTEL';
 export default function ActivitiesPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -72,7 +75,7 @@ export default function ActivitiesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientBundle) return;
-    setLoading(true);
+    setSubmitting(true);
     setError(null);
     try {
       const { databases, databaseId, COLLECTIONS } = clientBundle;
@@ -102,7 +105,7 @@ export default function ActivitiesPage() {
     } catch (e: any) {
       setError(e.message);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -120,7 +123,8 @@ export default function ActivitiesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this activity?')) return;
     if (!clientBundle) return;
-    setLoading(true);
+    setDeletingId(id);
+    setError(null);
     try {
       const { databases, databaseId, COLLECTIONS } = clientBundle;
       await databases.deleteDocument(databaseId, COLLECTIONS[COLLECTION_KEY], id);
@@ -128,13 +132,19 @@ export default function ActivitiesPage() {
     } catch (e: any) {
       setError(e.message);
     } finally {
-      setLoading(false);
+      setDeletingId(null);
     }
   };
 
   return (
     <div style={{ display: 'grid', gap: 24 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <style>{`
+        .activity-form-grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
+        @media(max-width: 640px) {
+          .activity-form-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <h2 style={{ margin: 0 }}>Activities & Experience Management</h2>
         <button onClick={() => (showForm ? resetForm() : setShowForm(true))} style={buttonStyle}>
           {showForm ? 'Cancel' : '+ Add Activity'}
@@ -146,7 +156,7 @@ export default function ActivitiesPage() {
       {showForm && (
         <form onSubmit={handleSubmit} style={cardStyle}>
           <h3>{editingId ? 'Edit Activity' : 'New Activity'}</h3>
-          <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '1fr 1fr' }}>
+          <div className="activity-form-grid">
             <input 
               placeholder="Activity Name" 
               required 
@@ -214,9 +224,16 @@ export default function ActivitiesPage() {
               />
             </label>
           </div>
-          <button type="submit" disabled={loading} style={{ ...buttonStyle, marginTop: 24 }}>
-            {loading ? 'Processing...' : editingId ? 'Update Activity' : 'Create Activity'}
-          </button>
+          <div style={{ marginTop: 24, display: 'flex', gap: 12 }}>
+            <LoaderButton type="submit" loading={submitting} variant="primary">
+              {submitting ? 'Processing...' : editingId ? 'Update Activity' : 'Create Activity'}
+            </LoaderButton>
+            {editingId && (
+              <button type="button" onClick={resetForm} style={{ ...smallButtonStyle, padding: '12px 20px' }}>
+                Cancel
+              </button>
+            )}
+          </div>
         </form>
       )}
 
@@ -257,14 +274,16 @@ export default function ActivitiesPage() {
                   {activity.available ? 'Available' : 'Unavailable'}
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button onClick={() => handleEdit(activity)} style={smallButtonStyle}>Edit</button>
-                <button 
-                  onClick={() => handleDelete(activity.$id)} 
-                  style={{ ...smallButtonStyle, background: '#fee2e2', color: '#EF4444' }}
+                <LoaderButton 
+                  variant="danger"
+                  size="sm"
+                  loading={deletingId === activity.$id}
+                  onClick={() => handleDelete(activity.$id)}
                 >
-                  Delete
-                </button>
+                  {deletingId === activity.$id ? 'Deleting...' : 'Delete'}
+                </LoaderButton>
               </div>
             </div>
           </div>

@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { getClients, ID, Query, type Models } from "../../lib/appwrite";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { drawLetterhead, stampDocumentFooter } from "../../lib/pdfLetterhead";
+import { FileDown } from "lucide-react";
 
 type Attendance = {
   $id: string;
@@ -13,6 +15,7 @@ type Attendance = {
   checkInTime?: string;
   checkOutTime?: string;
   notes?: string;
+  location?: string;
 };
 
 type StaffMember = {
@@ -27,6 +30,7 @@ export default function AttendancePage() {
   const [records, setRecords] = useState<Attendance[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [startDate, setStartDate] = useState(
     new Date().toISOString().split("T")[0],
@@ -86,45 +90,104 @@ export default function AttendancePage() {
     fetchData();
   }, [clientBundle, startDate, endDate]);
 
-  const generatePDF = () => {
-    const doc = new jsPDF();
+  const generatePDF = async () => {
+    setExportingPdf(true);
+    try {
+      const doc = new jsPDF();
+      const startY = await drawLetterhead(doc, {
+        title: "Staff Attendance Audit & Report",
+        subtitle: `Reporting Period: ${startDate} to ${endDate} · 360 Degree Global Estate Ltd.`,
+        docRef: `360-ATT-${startDate.replace(/-/g, "")}`,
+        badge: "ATTENDANCE",
+      });
 
-    doc.setFontSize(18);
-    doc.text("Attendance Report", 14, 22);
-    doc.setFontSize(11);
-    doc.text(`Period: ${startDate} to ${endDate}`, 14, 30);
+      // Quick Attendance Counts
+      const presentCount = records.filter((r) => r.status === "present").length;
+      const absentCount = records.filter((r) => r.status === "absent").length;
+      const lateCount = records.filter((r) => r.status === "late").length;
+      const leaveCount = records.filter((r) => r.status === "leave").length;
 
-    const tableColumn = [
-      "Staff Name",
-      "Date",
-      "Status",
-      "Check In",
-      "Check Out",
-      "Notes",
-    ];
-    const tableRows = records.map((record) => [
-      getStaffName(record.staffId),
-      record.date,
-      record.status,
-      record.checkInTime
-        ? new Date(record.checkInTime).toLocaleTimeString()
-        : "-",
-      record.checkOutTime
-        ? new Date(record.checkOutTime).toLocaleTimeString()
-        : "-",
-      record.notes || "-",
-    ]);
+      // Summary Metric Cards
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const cardY = startY;
+      const cardHeight = 11;
+      const cardSpacing = 4;
+      const margin = 14;
+      const availableWidth = pageWidth - margin * 2;
+      const cardWidth = (availableWidth - cardSpacing * 4) / 5;
 
-    autoTable(doc, {
-      head: [tableColumn],
-      body: tableRows,
-      startY: 40,
-      styles: { fontSize: 10 },
-      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
-    });
+      const metrics = [
+        { label: "TOTAL LOGS", val: `${records.length}`, color: [30, 41, 59] },
+        { label: "PRESENT", val: `${presentCount}`, color: [16, 185, 129] },
+        { label: "LATE", val: `${lateCount}`, color: [245, 158, 11] },
+        { label: "ABSENT", val: `${absentCount}`, color: [239, 68, 68] },
+        { label: "ON LEAVE", val: `${leaveCount}`, color: [99, 102, 241] },
+      ];
 
-    doc.save(`Attendance_Report_${startDate}_${endDate}.pdf`);
+      metrics.forEach((m, idx) => {
+        const cx = margin + idx * (cardWidth + cardSpacing);
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(cx, cardY, cardWidth, cardHeight, 1.5, 1.5, "F");
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(cx, cardY, cardWidth, cardHeight, 1.5, 1.5, "S");
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(5.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text(m.label, cx + 3, cardY + 4);
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(m.color[0], m.color[1], m.color[2]);
+        doc.text(m.val, cx + 3, cardY + 9);
+      });
+
+      const tableColumn = [
+        "#",
+        "Staff Name",
+        "Date",
+        "Status",
+        "Check In",
+        "Check Out",
+        "Notes / Location",
+      ];
+      const tableRows = records.map((record, idx) => [
+        String(idx + 1),
+        getStaffName(record.staffId),
+        record.date,
+        (record.status || "present").toUpperCase(),
+        record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString("en-GB") : "—",
+        record.checkOutTime ? new Date(record.checkOutTime).toLocaleTimeString("en-GB") : "—",
+        record.notes || record.location || "—",
+      ]);
+
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: cardY + cardHeight + 4,
+        margin: { left: 14, right: 14 },
+        styles: { fontSize: 8, cellPadding: 2.5, valign: "middle" },
+        headStyles: { fillColor: [26, 54, 93], textColor: 255, fontStyle: "bold", fontSize: 8 },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        columnStyles: {
+          0: { cellWidth: 10, halign: "center" },
+          1: { cellWidth: 42, fontStyle: "bold" },
+          2: { cellWidth: 26 },
+          3: { cellWidth: 24, fontStyle: "bold" },
+          4: { cellWidth: 24 },
+          5: { cellWidth: 24 },
+          6: { cellWidth: "auto" },
+        },
+      });
+
+      // Stamp IT department signature and page numbers on every page
+      stampDocumentFooter(doc, "Staff Attendance Audit Log");
+
+      doc.save(`360_Attendance_Report_${startDate}_${endDate}.pdf`);
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   const handleMarkAttendance = async (e: React.FormEvent) => {
@@ -220,9 +283,19 @@ export default function AttendancePage() {
           </div>
           <button
             onClick={generatePDF}
-            style={{ ...buttonStyle, background: "#10B981" }}
+            disabled={exportingPdf}
+            style={{
+              ...buttonStyle,
+              background: "#10B981",
+              opacity: exportingPdf ? 0.7 : 1,
+              cursor: exportingPdf ? "not-allowed" : "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
           >
-            Export PDF
+            <FileDown size={14} />
+            {exportingPdf ? "Generating PDF..." : "Export PDF"}
           </button>
         </div>
         <button
