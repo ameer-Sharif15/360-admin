@@ -69,6 +69,7 @@ type GymMember = {
   livingAddress?: string;
   height?: string;
   weight?: string;
+  signatureUrl?: string;
   goal?: string;
   focus?: string;
   emergencyContact?: {
@@ -149,6 +150,17 @@ export default function GymManagementPage() {
   const [editingMember, setEditingMember] = useState<GymMember | null>(null);
   const [cardModalMember, setCardModalMember] = useState<GymMember | null>(null);
   const [cardSide, setCardSide] = useState<"front" | "back">("front");
+
+  // Desk Scanner State
+  const [showScanModal, setShowScanModal] = useState(false);
+  const [scanInput, setScanInput] = useState("");
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanResult, setScanResult] = useState<{
+    success: boolean;
+    message: string;
+    member?: any;
+    attendance?: any;
+  } | null>(null);
 
   // Registration Form State
   const [regFullName, setRegFullName] = useState("");
@@ -252,11 +264,55 @@ export default function GymManagementPage() {
 
     socket.on("gym_membership_updated", handleLiveRefresh);
     socket.on("gym_membership_approved", handleLiveRefresh);
+    socket.on("gym_attendance_recorded", handleLiveRefresh);
 
     return () => {
       socket.disconnect();
     };
   }, []);
+
+  const handleScanPass = async (codeToScan?: string) => {
+    const raw = (codeToScan || scanInput || "").trim();
+    if (!raw) {
+      setError("Please enter or scan a member ID / card QR code.");
+      return;
+    }
+    setScanLoading(true);
+    setScanResult(null);
+
+    let cleanId = raw;
+    if (cleanId.includes("member=")) {
+      cleanId = cleanId.split("member=")[1].split("&")[0];
+    } else if (cleanId.includes("/gym/")) {
+      cleanId = cleanId.split("/gym/")[1].split("?")[0];
+    }
+
+    try {
+      const res = await apiRequest("/api/gym/admin/scan-attendance", {
+        method: "POST",
+        body: JSON.stringify({ memberId: cleanId }),
+      });
+
+      if (res && res.success) {
+        setScanResult(res);
+        setSuccessMsg(res.message || "Attendance recorded successfully!");
+        fetchMembers();
+        fetchStats();
+      } else {
+        setScanResult({
+          success: false,
+          message: res?.message || "Attendance validation failed.",
+        });
+      }
+    } catch (err: any) {
+      setScanResult({
+        success: false,
+        message: err.message || "Failed to scan member pass.",
+      });
+    } finally {
+      setScanLoading(false);
+    }
+  };
 
   // Update plan price automatically when plan dropdown changes
   const handlePlanChange = (type: string) => {
@@ -586,6 +642,23 @@ export default function GymManagementPage() {
               }}
             >
               <Plus size={16} /> + Register Walk-In Member
+            </button>
+
+            <button
+              onClick={() => {
+                setShowScanModal(true);
+                setScanResult(null);
+                setScanInput("");
+              }}
+              style={{
+                padding: "10px 18px", borderRadius: 10, border: "none",
+                background: "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+                color: "#fff", fontWeight: 800, fontSize: 13.5,
+                display: "inline-flex", alignItems: "center", gap: 7, cursor: "pointer",
+                boxShadow: "0 4px 14px rgba(16,185,129,0.35)",
+              }}
+            >
+              <QrCode size={16} /> Scan Member Pass
             </button>
           </div>
         </div>
@@ -1840,15 +1913,32 @@ export default function GymManagementPage() {
 
                     {/* Card Footer */}
                     <div style={{
-                      display: "flex", justifyContent: "space-between", alignItems: "center",
-                      borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 6,
+                      display: "flex", justifyContent: "space-between", alignItems: "flex-end",
+                      borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 4,
                     }}>
-                      <div style={{ fontSize: 8.5, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                        Authorized Member Pass
+                      <div>
+                        <div style={{ fontSize: 7.5, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                          Authorized Member Pass
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 8.5, color: "#10B981", fontWeight: 800, marginTop: 2 }}>
+                          <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#10B981" }} />
+                          ACTIVE PASS
+                        </div>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, color: "#10B981", fontWeight: 800 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981" }} />
-                        ACTIVE PASS
+
+                      {/* Member Signature */}
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ borderBottom: "1px solid rgba(245, 158, 11, 0.4)", minHeight: 18, display: "flex", alignItems: "flex-end", justifyContent: "flex-end" }}>
+                          <img
+                            src={cardModalMember.signatureUrl || "/signatures/official_signature_gold.png"}
+                            alt="Member Signature"
+                            crossOrigin="anonymous"
+                            style={{ height: 18, objectFit: "contain", display: "block" }}
+                          />
+                        </div>
+                        <div style={{ fontSize: 6.5, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.4, marginTop: 1 }}>
+                          Member Signature
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1914,10 +2004,14 @@ export default function GymManagementPage() {
                       <div style={{ textAlign: "right" }}>
                         <div style={{
                           display: "inline-block", borderBottom: "1px solid #F59E0B",
-                          fontFamily: "'Brush Script MT', cursive, sans-serif", fontSize: 13, color: "#F59E0B",
-                          paddingBottom: 2,
+                          paddingBottom: 2, minHeight: 26,
                         }}>
-                          Abbas Modibbo
+                          <img
+                            src="/signatures/official_signature_gold.png"
+                            alt="Director of Athletics Signature"
+                            crossOrigin="anonymous"
+                            style={{ height: 24, objectFit: "contain", display: "block" }}
+                          />
                         </div>
                         <div style={{ fontSize: 7, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 1 }}>
                           Director of Athletics
@@ -1954,6 +2048,160 @@ export default function GymManagementPage() {
                     <Printer size={15} /> Print Badge
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ════ MODAL 4: DESK SCANNER & PASS CHECK-IN ════ */}
+        {showScanModal && (
+          <div
+            style={{
+              position: "fixed", inset: 0, zIndex: 9999,
+              background: "rgba(15, 23, 42, 0.8)", backdropFilter: "blur(8px)",
+              display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+            }}
+          >
+            <div
+              style={{
+                background: "#0F172A", border: "1px solid #334155", borderRadius: 20,
+                maxWidth: 480, width: "100%", padding: 28, color: "#fff",
+                boxShadow: "0 25px 50px -12px rgba(0,0,0,0.7)", position: "relative",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{
+                    width: 38, height: 38, borderRadius: 10, background: "rgba(16, 185, 129, 0.15)",
+                    display: "flex", alignItems: "center", justifyContent: "center", color: "#34D399",
+                  }}>
+                    <QrCode size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>Gym Desk Attendance Scanner</h3>
+                    <p style={{ fontSize: 12, color: "#94A3B8", margin: 0 }}>Scan card QR or enter Member ID</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setShowScanModal(false); setScanResult(null); setScanInput(""); }}
+                  style={{ background: "transparent", border: "none", color: "#94A3B8", cursor: "pointer" }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Form Input */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleScanPass();
+                }}
+                style={{ marginBottom: 20 }}
+              >
+                <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#CBD5E1", marginBottom: 8 }}>
+                  Member Pass ID / QR Code Scan
+                </label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={scanInput}
+                    onChange={(e) => setScanInput(e.target.value)}
+                    placeholder="e.g. 360-GYM-0012 or scan QR..."
+                    style={{
+                      flex: 1, padding: "12px 14px", borderRadius: 10,
+                      background: "#1E293B", border: "1px solid #475569",
+                      color: "#fff", fontSize: 14, outline: "none",
+                    }}
+                  />
+                  <LoaderButton
+                    loading={scanLoading}
+                    type="submit"
+                    style={{
+                      padding: "12px 20px", borderRadius: 10, border: "none",
+                      background: "linear-gradient(135deg, #10B981, #059669)",
+                      color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer",
+                    }}
+                  >
+                    Check In
+                  </LoaderButton>
+                </div>
+              </form>
+
+              {/* Scan Result Box */}
+              {scanResult && (
+                <div
+                  style={{
+                    background: scanResult.success ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
+                    border: `1.5px solid ${scanResult.success ? "#10B981" : "#EF4444"}`,
+                    borderRadius: 14, padding: 18, marginBottom: 16,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    {scanResult.success ? (
+                      <CheckCircle2 size={24} style={{ color: "#34D399" }} />
+                    ) : (
+                      <AlertCircle size={24} style={{ color: "#F87171" }} />
+                    )}
+                    <div>
+                      <div style={{
+                        fontSize: 15, fontWeight: 800,
+                        color: scanResult.success ? "#34D399" : "#F87171",
+                      }}>
+                        {scanResult.success ? "Access Granted - Check-in Logged!" : "Access Denied"}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#E2E8F0", marginTop: 2 }}>
+                        {scanResult.message}
+                      </div>
+                    </div>
+                  </div>
+
+                  {scanResult.member && (
+                    <div style={{
+                      background: "#0F172A", borderRadius: 10, padding: 12, marginTop: 12,
+                      display: "flex", alignItems: "center", gap: 12,
+                    }}>
+                      {scanResult.member.passportPhoto ? (
+                        <img
+                          src={scanResult.member.passportPhoto}
+                          alt="Member"
+                          style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: 44, height: 44, borderRadius: 8, background: "#334155",
+                          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
+                        }}>
+                          🏋️
+                        </div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>
+                          {scanResult.member.fullName}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#94A3B8" }}>
+                          ID: {scanResult.member.memberId || "360-GYM"} · {scanResult.member.membershipType?.toUpperCase()}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#FBBF24", fontWeight: 600, marginTop: 2 }}>
+                          {scanResult.member.daysRemaining ?? "—"} days remaining (expires {scanResult.member.endDate || "N/A"})
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={{ textAlign: "right", marginTop: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => { setShowScanModal(false); setScanResult(null); setScanInput(""); }}
+                  style={{
+                    padding: "8px 16px", borderRadius: 8, border: "1px solid #475569",
+                    background: "transparent", color: "#CBD5E1", fontSize: 13, cursor: "pointer",
+                  }}
+                >
+                  Done
+                </button>
               </div>
             </div>
           </div>

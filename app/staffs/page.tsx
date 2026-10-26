@@ -243,7 +243,7 @@ export default function StaffsPage() {
 
   useEffect(() => {
     const saved = localStorage.getItem(DIRECTOR_SIG_KEY);
-    if (saved) setDirectorSigUrl(saved);
+    setDirectorSigUrl(saved || "/signatures/official_signature_dark.png");
   }, []);
 
   // Auto-clear alerts
@@ -2056,8 +2056,9 @@ export default function StaffsPage() {
               {/* Cards Grid */}
               <div className="print-area-360" style={{ display: "flex", gap: 36, flexWrap: "wrap", justifyContent: "center" }}>
                 {previewMembers.map((member) => {
-                  const verifyUrl = `${API_BASE_URL}/api/staff/${member.$id}/verify`;
-                  const attendUrl = `${API_BASE_URL}/api/staff/${member.$id}/attend`;
+                  const publicWebUrl = process.env.NEXT_PUBLIC_WEBAPP_URL || (typeof window !== "undefined" && window.location.origin.includes("localhost") ? "https://360degreeglobal.org" : "https://360degreeglobal.org");
+                  const verifyUrl = `${publicWebUrl}/verify/staff/${member.$id}`;
+                  const attendUrl = `${publicWebUrl}/attend/staff/${member.$id}`;
                   const empId = member.employeeId || `360-${member.$id.slice(0, 6).toUpperCase()}`;
 
                   return (
@@ -2217,12 +2218,10 @@ export default function StaffsPage() {
                                 transform: `translate(${cardLayout.signatureX}px,${cardLayout.signatureY}px)`,
                               }}>
                                 <div style={{ minHeight: 20, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-                                  {member.signatureUrl ? (
-                                    <img
-                                      src={member.signatureUrl} alt="Cardholder Signature" crossOrigin="anonymous"
-                                      style={{ height: (18 * cardLayout.signatureScale) / 100, objectFit: "contain", display: "block", margin: "0 auto" }}
-                                    />
-                                  ) : <div style={{ height: 16 }} />}
+                                  <img
+                                    src={member.signatureUrl || "/signatures/official_signature_dark.png"} alt="Cardholder Signature" crossOrigin="anonymous"
+                                    style={{ height: (18 * cardLayout.signatureScale) / 100, objectFit: "contain", display: "block", margin: "0 auto" }}
+                                  />
                                 </div>
                                 <div style={{ borderTop: "1px solid #0F172A", paddingTop: 1 }}>
                                   <div style={{ fontSize: 5, fontWeight: 800, color: "#0F172A", letterSpacing: 0.3 }}>
@@ -2293,12 +2292,10 @@ export default function StaffsPage() {
                                 borderBottom: "1.5px solid #0F172A",
                                 minHeight: 24, display: "flex", alignItems: "flex-end", justifyContent: "center",
                               }}>
-                                {directorSigUrl && (
-                                  <img
-                                    src={directorSigUrl} alt="Managing Director Signature" crossOrigin="anonymous"
-                                    style={{ maxHeight: 24, objectFit: "contain" }}
-                                  />
-                                )}
+                                <img
+                                  src={directorSigUrl || "/signatures/official_signature_dark.png"} alt="Managing Director Signature" crossOrigin="anonymous"
+                                  style={{ maxHeight: 24, objectFit: "contain" }}
+                                />
                               </div>
                               <div style={{ fontSize: 6.5, fontWeight: 900, color: "#0F172A" }}>ENGR. ABBAS MODIBBO</div>
                               <div style={{ fontSize: 5.5, fontWeight: 700, color: "#64748B" }}>Managing Director / CEO</div>

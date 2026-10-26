@@ -1,4 +1,9 @@
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://three60-backend-a17m.onrender.com';
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:5001'
+    : 'https://three60-backend-a17m.onrender.com');
 
 export async function apiRequest<T = any>(
   path: string,

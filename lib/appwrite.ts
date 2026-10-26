@@ -106,7 +106,19 @@ const mapCollectionToEndpoint = (col: string): string => {
 
 class ExpressDatabasesAdapter {
   async listDocuments<T = any>(_databaseId: string, collectionId: string, _queries?: any[]) {
-    const endpoint = mapCollectionToEndpoint(collectionId);
+    let endpoint = mapCollectionToEndpoint(collectionId);
+    if (_queries && Array.isArray(_queries) && _queries.length > 0) {
+      const params = new URLSearchParams();
+      _queries.forEach((q) => {
+        if (q && q.attr && q.val !== undefined) {
+          if (q.type === 'gte' && q.attr === 'date') params.set('startDate', String(q.val));
+          else if (q.type === 'lte' && q.attr === 'date') params.set('endDate', String(q.val));
+          else if (q.type === 'equal') params.set(q.attr, String(q.val));
+        }
+      });
+      const qs = params.toString();
+      if (qs) endpoint += `${endpoint.includes('?') ? '&' : '?'}${qs}`;
+    }
     try {
       const data = await apiRequest(endpoint);
       const rawList = Array.isArray(data)
