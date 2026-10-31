@@ -93,50 +93,67 @@ export async function drawLetterhead(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(255, 127, 80);
-  doc.text('OFFICIAL DOCUMENT', rightX, 16, { align: 'right' });
+  doc.text('OFFICIAL DOCUMENT', rightX, 15, { align: 'right' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
   doc.setTextColor(100, 116, 139);
-  doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, rightX, 21, { align: 'right' });
+  doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, rightX, 19.5, { align: 'right' });
   if (options.docRef) {
-    doc.text(`Ref: ${options.docRef}`, rightX, 26, { align: 'right' });
+    doc.text(`Ref: ${options.docRef}`, rightX, 23.5, { align: 'right' });
   }
-  doc.setTextColor(16, 185, 129); // Green check
-  doc.text('● IT CERTIFIED & SECURE', rightX, 30, { align: 'right' });
+
+  // IT Verified & Audited Official Badge Pill (Responsively sized & positioned)
+  const badgeWidth = 44;
+  const badgeHeight = 5.8;
+  const badgeX = rightX - badgeWidth;
+  const badgeY = options.docRef ? 26.5 : 24.5;
+
+  // Emerald badge background & border
+  doc.setFillColor(236, 253, 245); // Emerald 50
+  doc.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 1.8, 1.8, 'F');
+  doc.setDrawColor(16, 185, 129); // Emerald 500
+  doc.setLineWidth(0.3);
+  doc.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 1.8, 1.8, 'S');
+
+  // Badge text
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.8);
+  doc.setTextColor(6, 95, 70); // Emerald 800
+  doc.text('✔ IT VERIFIED & SECURE', badgeX + badgeWidth / 2, badgeY + 4.1, { align: 'center' });
 
   // Divider Line
   doc.setDrawColor(255, 127, 80);
   doc.setLineWidth(0.8);
-  doc.line(leftMargin, 34, pageWidth - 14, 34);
+  doc.line(leftMargin, 37, pageWidth - 14, 37);
 
   // Document Title Banner
   doc.setFillColor(248, 250, 252);
-  doc.roundedRect(leftMargin, 37, pageWidth - 28, 14, 2, 2, 'F');
+  doc.roundedRect(leftMargin, 40, pageWidth - 28, 14, 2, 2, 'F');
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.3);
-  doc.roundedRect(leftMargin, 37, pageWidth - 28, 14, 2, 2, 'S');
+  doc.roundedRect(leftMargin, 40, pageWidth - 28, 14, 2, 2, 'S');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.setTextColor(26, 54, 93);
-  doc.text(options.title.toUpperCase(), leftMargin + 4, 45);
+  doc.text(options.title.toUpperCase(), leftMargin + 4, 48);
 
   if (options.subtitle) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(100, 116, 139);
-    doc.text(options.subtitle, leftMargin + 4, 49);
+    doc.text(options.subtitle, leftMargin + 4, 52);
   }
 
   if (options.badge) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     doc.setTextColor(255, 127, 80);
-    doc.text(options.badge, rightX - 4, 46, { align: 'right' });
+    doc.text(options.badge, rightX - 4, 49, { align: 'right' });
   }
 
-  return 55; // Next content Y position
+  return 58; // Next content Y position
 }
 
 function drawFallbackLogo(doc: jsPDF, x: number, y: number, size: number) {

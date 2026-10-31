@@ -69,8 +69,13 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
   // Real-time unread messages count sync for Communication tab
   useEffect(() => {
     if (!user) return;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('admin_jwt') : null;
+    if (!token) return;
 
     const fetchUnreadCount = async () => {
+      const currentToken = typeof window !== 'undefined' ? localStorage.getItem('admin_jwt') : null;
+      if (!currentToken) return;
+
       try {
         const contacts = await apiRequest('/api/chats/it-contacts');
         if (Array.isArray(contacts)) {
@@ -103,7 +108,18 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
     // Socket.io for live updates
     let socket: any = null;
     try {
-      socket = io(API_BASE_URL, { transports: ['websocket', 'polling'] });
+      socket = io(API_BASE_URL, {
+        auth: { token },
+        extraHeaders: { Authorization: `Bearer ${token}` },
+        transports: ['polling', 'websocket'],
+        reconnectionAttempts: 3,
+        timeout: 5000,
+      });
+
+      socket.on('connect_error', () => {
+        // silent failover, avoid console noise when socket transport is not ready
+      });
+
       socket.on('connect', () => {
         socket.emit('join_channel', 'admin_channel');
         socket.emit('join_channel', 'support_channel');

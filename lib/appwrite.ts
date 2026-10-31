@@ -37,6 +37,8 @@ export const COLLECTIONS = {
   STAFF_MEMBERS: 'staff_members',
   MINI_MART_ITEMS: 'mini_mart_items',
   INVENTORY: 'inventory',
+  ITEM_SUPPLIES: 'item_supplies',
+  SUPPLY_CATEGORIES: 'supply_categories',
 };
 
 export const ID = {
@@ -99,6 +101,10 @@ const mapCollectionToEndpoint = (col: string): string => {
       return '/api/branches';
     case 'inventory':
       return '/api/inventory';
+    case 'item_supplies':
+      return '/api/inventory/supplies';
+    case 'supply_categories':
+      return '/api/inventory/categories';
     default:
       return `/api/${col}`;
   }
