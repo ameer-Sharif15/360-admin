@@ -49,22 +49,27 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [unreadCommCount, setUnreadCommCount] = useState(0);
 
+  const isPublicRoute =
+    pathname === '/login' ||
+    pathname.startsWith('/staff-form') ||
+    pathname.startsWith('/staff-update');
+
   useEffect(() => {
-    if (!loading && !user && pathname !== '/login') {
+    if (!loading && !user && !isPublicRoute) {
       router.push('/login');
     }
-  }, [user, loading, pathname, router]);
+  }, [user, loading, pathname, router, isPublicRoute]);
 
   // Fallback watchdog: If loading ever takes longer than 5 seconds, auto-redirect to /login
   useEffect(() => {
-    if (pathname === '/login') return;
+    if (isPublicRoute) return;
     const timer = setTimeout(() => {
       if (loading) {
         router.push('/login');
       }
     }, 5000);
     return () => clearTimeout(timer);
-  }, [loading, pathname, router]);
+  }, [loading, pathname, router, isPublicRoute]);
 
   // Real-time unread messages count sync for Communication tab
   useEffect(() => {
@@ -151,8 +156,8 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
     setMobileMenuOpen(false);
   }, [pathname]);
 
-  // Show login page without layout
-  if (pathname === '/login') {
+  // Show login page or public staff form without layout
+  if (isPublicRoute) {
     return <>{children}</>;
   }
 

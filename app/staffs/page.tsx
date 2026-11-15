@@ -82,6 +82,28 @@ export type StaffMember = {
   documents?: StaffDocument[];
 };
 
+export type StaffSubmissionItem = {
+  _id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  department?: string;
+  position?: string;
+  employeeId?: string;
+  photoUrl?: string;
+  bankName?: string;
+  accountNumber?: string;
+  accountName?: string;
+  salary?: number;
+  documents?: StaffDocument[];
+  status: "pending" | "approved" | "rejected";
+  reviewNotes?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type MonthlyPayrollRecord = {
   _id?: string;
   staffId: string;
@@ -163,11 +185,22 @@ function LoaderButton({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function StaffsPage() {
-  const [activeTab, setActiveTab] = useState<"directory" | "salary" | "documents">("directory");
+  const [activeTab, setActiveTab] = useState<"directory" | "salary" | "documents" | "submissions">("directory");
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Staff Form Submissions State
+  const [submissions, setSubmissions] = useState<StaffSubmissionItem[]>([]);
+  const [pendingSubmissionsCount, setPendingSubmissionsCount] = useState<number>(0);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
+  const [submissionFilter, setSubmissionFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending");
+  const [submissionSearch, setSubmissionSearch] = useState("");
+  const [reviewingSubmission, setReviewingSubmission] = useState<StaffSubmissionItem | null>(null);
+  const [reviewActionLoading, setReviewActionLoading] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [showRejectInput, setShowRejectInput] = useState(false);
 
   // Form
   const [showForm, setShowForm] = useState(false);
@@ -273,6 +306,86 @@ export default function StaffsPage() {
   };
 
   useEffect(() => { fetchStaff(); }, [clientBundle]);
+
+  // ─── Fetch Staff Form Submissions ─────────────────────────────────────────
+  const fetchSubmissions = async () => {
+    setLoadingSubmissions(true);
+    try {
+      const res = await apiRequest(
+        `/api/staff-submissions?status=${submissionFilter}&search=${encodeURIComponent(submissionSearch)}`
+      );
+      if (res && res.success) {
+        setSubmissions(res.submissions || []);
+        if (typeof res.pendingCount === "number") {
+          setPendingSubmissionsCount(res.pendingCount);
+        }
+      }
+    } catch (err: any) {
+      console.warn("Could not fetch staff submissions:", err);
+    } finally {
+      setLoadingSubmissions(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSubmissions();
+  }, [submissionFilter, submissionSearch]);
+
+  const handleApproveSubmission = async (subId: string) => {
+    try {
+      setReviewActionLoading(true);
+      const res = await apiRequest(`/api/staff-submissions/${subId}/approve`, {
+        method: "POST",
+      });
+      if (res && res.success) {
+        setSuccessMsg(res.message || "Staff member approved and saved to records!");
+        setReviewingSubmission(null);
+        await fetchSubmissions();
+        await fetchStaff();
+      } else {
+        throw new Error(res?.message || "Failed to approve submission");
+      }
+    } catch (err: any) {
+      setError("Approval failed: " + err.message);
+    } finally {
+      setReviewActionLoading(false);
+    }
+  };
+
+  const handleRejectSubmission = async (subId: string) => {
+    try {
+      setReviewActionLoading(true);
+      const res = await apiRequest(`/api/staff-submissions/${subId}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ reason: rejectReason || "Rejected by Admin" }),
+      });
+      if (res && res.success) {
+        setSuccessMsg("Submission marked as rejected.");
+        setReviewingSubmission(null);
+        setShowRejectInput(false);
+        setRejectReason("");
+        await fetchSubmissions();
+      } else {
+        throw new Error(res?.message || "Failed to reject submission");
+      }
+    } catch (err: any) {
+      setError("Rejection failed: " + err.message);
+    } finally {
+      setReviewActionLoading(false);
+    }
+  };
+
+  const handleDeleteSubmission = async (subId: string) => {
+    if (!confirm("Are you sure you want to permanently delete this submission?")) return;
+    try {
+      await apiRequest(`/api/staff-submissions/${subId}`, { method: "DELETE" });
+      setSuccessMsg("Submission deleted.");
+      if (reviewingSubmission?._id === subId) setReviewingSubmission(null);
+      await fetchSubmissions();
+    } catch (err: any) {
+      setError("Delete failed: " + err.message);
+    }
+  };
 
   // ─── Fetch Monthly Payroll Records (Merged with Staff Roster) ─────────────
   const fetchMonthlyPayroll = async (year = selectedYear, month = selectedMonth, currentStaff = staff) => {
@@ -1071,6 +1184,46 @@ export default function StaffsPage() {
             <p style={{ margin: 0, color: "#666", fontSize: 14 }}>CR80 Identity Cards · Monthly Banking Schedule · Archive · Documents</p>
           </div>
           <div className="staff-btn-row">
+            <a
+              href="/staff-form"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                ...btn,
+                background: "#0F172A",
+                color: "#FBBF24",
+                border: "1px solid #D97706",
+                fontSize: 13,
+                padding: "9px 14px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                textDecoration: "none",
+              }}
+            >
+              <ExternalLink size={14} /> Open Public Form
+            </a>
+            <button
+              onClick={() => {
+                const url = typeof window !== 'undefined' ? `${window.location.origin}/staff-form` : 'https://360-admin-one.vercel.app/staff-form';
+                navigator.clipboard.writeText(url);
+                setSuccessMsg("Public Staff Form link copied to clipboard! You can share it directly with staff.");
+              }}
+              style={{
+                ...btn,
+                background: "#F8FAFC",
+                color: "#334155",
+                border: "1px solid #CBD5E1",
+                fontSize: 13,
+                padding: "9px 14px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                cursor: "pointer",
+              }}
+            >
+              <FileText size={14} /> Copy Form Link
+            </button>
             <LoaderButton
               onClick={() => setShowDirectorSigPanel((v) => !v)}
               style={{ ...btn, background: showDirectorSigPanel ? "#1a365d" : "#6366F1", fontSize: 13, padding: "9px 14px", display: "inline-flex", alignItems: "center", gap: 6 }}
@@ -1160,18 +1313,45 @@ export default function StaffsPage() {
 
         {/* ── Tabs ──────────────────────────────────────────────────────────── */}
         <div className="staff-tabs">
-          {(["directory", "salary", "documents"] as const).map((tab) => (
+          {(["directory", "salary", "documents", "submissions"] as const).map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)} className="staff-tab-btn" style={{
               borderBottom: activeTab === tab ? "3px solid #ff7f50" : "3px solid transparent",
               color: activeTab === tab ? "#ff7f50" : "#6B7280",
               display: "inline-flex", alignItems: "center", gap: 6,
             }}>
               {tab === "directory" ? (
-                <><Users size={15} /> Staff Directory</>
+                <><Users size={15} /> Staff Directory ({staff.length})</>
               ) : tab === "salary" ? (
                 <><DollarSign size={15} /> Monthly Salary & Banking</>
-              ) : (
+              ) : tab === "documents" ? (
                 <><FolderOpen size={15} /> Documents</>
+              ) : (
+                <>
+                  <FileText size={15} /> Staff Form Submissions
+                  {pendingSubmissionsCount > 0 ? (
+                    <span style={{
+                      background: "#EF4444",
+                      color: "#FFFFFF",
+                      borderRadius: "9999px",
+                      padding: "1px 7px",
+                      fontSize: 11,
+                      fontWeight: 800,
+                    }}>
+                      {pendingSubmissionsCount}
+                    </span>
+                  ) : (
+                    <span style={{
+                      background: "#E2E8F0",
+                      color: "#475569",
+                      borderRadius: "9999px",
+                      padding: "1px 7px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}>
+                      {submissions.length}
+                    </span>
+                  )}
+                </>
               )}
             </button>
           ))}
@@ -1840,6 +2020,501 @@ export default function StaffsPage() {
               ) : (
                 <div style={{ textAlign: "center", padding: 40, color: "#9CA3AF" }}>Select a staff member to manage documents.</div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ── VIEW 4: STAFF FORM SUBMISSIONS (PENDING REVIEW & APPROVAL) ── */}
+        {activeTab === "submissions" && (
+          <div style={card}>
+            {/* Top Toolbar */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14, marginBottom: 20 }}>
+              <div>
+                <h3 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 800, color: "#0F172A", display: "flex", alignItems: "center", gap: 8 }}>
+                  <FileText size={18} color="#FF7F50" />
+                  Staff Profile & Document Submissions
+                </h3>
+                <p style={{ margin: 0, fontSize: 13, color: "#64748B" }}>
+                  Review, verify, and approve incoming soft-copies, passport photos, and bank account updates from staff.
+                </p>
+              </div>
+
+              {/* Status Filter Pills & Search */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", background: "#F1F5F9", padding: 3, borderRadius: 10, gap: 2 }}>
+                  {(["pending", "all", "approved", "rejected"] as const).map((st) => (
+                    <button
+                      key={st}
+                      onClick={() => setSubmissionFilter(st)}
+                      style={{
+                        border: "none",
+                        background: submissionFilter === st ? "#FFFFFF" : "transparent",
+                        color: submissionFilter === st ? "#0F172A" : "#64748B",
+                        fontWeight: submissionFilter === st ? 700 : 500,
+                        padding: "6px 12px",
+                        borderRadius: 8,
+                        fontSize: 12,
+                        cursor: "pointer",
+                        boxShadow: submissionFilter === st ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      {st === "pending" ? `Pending (${pendingSubmissionsCount})` : st}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ position: "relative" }}>
+                  <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: "#94A3B8" }} />
+                  <input
+                    type="text"
+                    placeholder="Search name, phone, dept..."
+                    value={submissionSearch}
+                    onChange={(e) => setSubmissionSearch(e.target.value)}
+                    style={{ ...inp, paddingLeft: 30, width: 200, fontSize: 12, height: 34 }}
+                  />
+                </div>
+
+                <button
+                  onClick={fetchSubmissions}
+                  title="Refresh Submissions"
+                  style={{ ...smallBtn, background: "#F1F5F9", color: "#334155", display: "inline-flex", alignItems: "center", gap: 4 }}
+                >
+                  <RefreshCw size={12} className={loadingSubmissions ? "animate-spin" : ""} /> Refresh
+                </button>
+              </div>
+            </div>
+
+            {/* Public Link Bar */}
+            <div style={{
+              background: "#FFFBEB",
+              border: "1px solid #FDE68A",
+              borderRadius: 12,
+              padding: "12px 16px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 10,
+              marginBottom: 20,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
+                <span style={{ background: "#F59E0B", color: "#fff", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
+                  PUBLIC LINK
+                </span>
+                <span style={{ color: "#92400E", fontWeight: 600 }}>Share this dedicated link with staff to fill out:</span>
+                <code style={{ background: "#FEF3C7", padding: "3px 8px", borderRadius: 6, color: "#B45309", fontSize: 12 }}>
+                  {typeof window !== "undefined" ? `${window.location.origin}/staff-form` : "https://360-admin-one.vercel.app/staff-form"}
+                </code>
+              </div>
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => {
+                    const url = typeof window !== "undefined" ? `${window.location.origin}/staff-form` : "https://360-admin-one.vercel.app/staff-form";
+                    navigator.clipboard.writeText(url);
+                    setSuccessMsg("Public link copied to clipboard!");
+                  }}
+                  style={{ ...smallBtn, background: "#D97706", color: "#fff", display: "inline-flex", alignItems: "center", gap: 4 }}
+                >
+                  <FileText size={12} /> Copy Link
+                </button>
+                <a
+                  href="/staff-form"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ ...smallBtn, background: "#78350F", color: "#fff", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
+                >
+                  <ExternalLink size={12} /> Open Form
+                </a>
+              </div>
+            </div>
+
+            {/* Submissions Table */}
+            <div className="staff-table-wrap">
+              {loadingSubmissions ? (
+                <div style={{ textAlign: "center", padding: "60px 0" }}>
+                  <Spinner size={24} color="#ff7f50" />
+                  <div style={{ marginTop: 12, color: "#64748B", fontSize: 13 }}>Loading submissions...</div>
+                </div>
+              ) : submissions.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "60px 0", color: "#64748B" }}>
+                  <FileText size={36} color="#CBD5E1" style={{ margin: "0 auto 10px" }} />
+                  <div style={{ fontWeight: 700, fontSize: 16, color: "#1E293B" }}>No Submissions Found</div>
+                  <div style={{ fontSize: 13, marginTop: 4 }}>
+                    {submissionFilter === "pending"
+                      ? "There are currently no pending staff submissions awaiting review."
+                      : "No records found matching your current filter or search criteria."}
+                  </div>
+                </div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: "#F8FAFC", borderBottom: "2px solid #E2E8F0", textAlign: "left", color: "#475569", fontSize: 11.5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      <th style={{ padding: "12px 14px" }}>Passport</th>
+                      <th style={{ padding: "12px 14px" }}>Staff Member</th>
+                      <th style={{ padding: "12px 14px" }}>Contact</th>
+                      <th style={{ padding: "12px 14px" }}>Department & Position</th>
+                      <th style={{ padding: "12px 14px" }}>Bank & Stated Salary</th>
+                      <th style={{ padding: "12px 14px" }}>Documents</th>
+                      <th style={{ padding: "12px 14px" }}>Status</th>
+                      <th style={{ padding: "12px 14px", textAlign: "right" }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {submissions.map((sub) => {
+                      const statusColor =
+                        sub.status === "approved"
+                          ? { bg: "#DCFCE7", text: "#15803D" }
+                          : sub.status === "rejected"
+                          ? { bg: "#FEE2E2", text: "#B91C1C" }
+                          : { bg: "#FEF3C7", text: "#B45309" };
+
+                      return (
+                        <tr key={sub._id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                          {/* Passport */}
+                          <td style={{ padding: "12px 14px" }}>
+                            {sub.photoUrl ? (
+                              <img
+                                src={sub.photoUrl}
+                                alt={sub.name}
+                                style={{ width: 44, height: 52, objectFit: "cover", borderRadius: 6, border: "1px solid #E2E8F0" }}
+                              />
+                            ) : (
+                              <div style={{ width: 44, height: 52, background: "#F1F5F9", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: "#94A3B8" }}>
+                                <User size={18} />
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Staff Name */}
+                          <td style={{ padding: "12px 14px" }}>
+                            <div style={{ fontWeight: 700, color: "#0F172A", fontSize: 14 }}>{sub.name}</div>
+                            {sub.employeeId && (
+                              <div style={{ fontSize: 11, color: "#64748B", fontFamily: "monospace" }}>ID: {sub.employeeId}</div>
+                            )}
+                            <div style={{ fontSize: 10.5, color: "#94A3B8" }}>
+                              Submitted: {new Date(sub.createdAt).toLocaleDateString()}
+                            </div>
+                          </td>
+
+                          {/* Contact */}
+                          <td style={{ padding: "12px 14px" }}>
+                            <div style={{ color: "#334155", fontWeight: 600 }}>{sub.phone}</div>
+                            <div style={{ fontSize: 12, color: "#64748B" }}>{sub.email || "—"}</div>
+                          </td>
+
+                          {/* Department & Position */}
+                          <td style={{ padding: "12px 14px" }}>
+                            <div style={{ fontWeight: 600, color: "#0F172A" }}>{sub.department || "General"}</div>
+                            <div style={{ fontSize: 12, color: "#64748B" }}>{sub.position || "Staff"}</div>
+                          </td>
+
+                          {/* Bank & Salary */}
+                          <td style={{ padding: "12px 14px" }}>
+                            <div style={{ fontWeight: 600, color: "#0F172A" }}>{sub.bankName || "—"}</div>
+                            <div style={{ fontSize: 12, fontFamily: "monospace", color: "#475569" }}>
+                              {sub.accountNumber || "—"}
+                            </div>
+                            <div style={{ fontSize: 11.5, color: "#059669", fontWeight: 700, marginTop: 2 }}>
+                              ₦{Number(sub.salary || 0).toLocaleString()} /mo
+                            </div>
+                          </td>
+
+                          {/* Documents */}
+                          <td style={{ padding: "12px 14px" }}>
+                            {sub.documents && sub.documents.length > 0 ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                <span style={{ background: "#EFF6FF", color: "#1D4ED8", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700, width: "fit-content" }}>
+                                  {sub.documents.length} File{sub.documents.length > 1 ? "s" : ""}
+                                </span>
+                                <span style={{ fontSize: 10.5, color: "#64748B" }}>
+                                  {sub.documents[0].title}
+                                </span>
+                              </div>
+                            ) : (
+                              <span style={{ color: "#94A3B8", fontSize: 12 }}>No files</span>
+                            )}
+                          </td>
+
+                          {/* Status */}
+                          <td style={{ padding: "12px 14px" }}>
+                            <span style={{ background: statusColor.bg, color: statusColor.text, padding: "4px 10px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, textTransform: "capitalize" }}>
+                              {sub.status}
+                            </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td style={{ padding: "12px 14px", textAlign: "right" }}>
+                            <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                              <button
+                                onClick={() => {
+                                  setReviewingSubmission(sub);
+                                  setShowRejectInput(false);
+                                  setRejectReason("");
+                                }}
+                                style={{ ...smallBtn, background: "#1E293B", color: "#fff", display: "inline-flex", alignItems: "center", gap: 4 }}
+                              >
+                                <Eye size={12} /> Review & Verify
+                              </button>
+
+                              {sub.status === "pending" && (
+                                <button
+                                  onClick={() => handleApproveSubmission(sub._id)}
+                                  title="Quick Approve & Add to Staff"
+                                  style={{ ...smallBtn, background: "#DCFCE7", color: "#15803D", display: "inline-flex", alignItems: "center" }}
+                                >
+                                  <Check size={12} />
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => handleDeleteSubmission(sub._id)}
+                                title="Delete Submission"
+                                style={{ ...smallBtn, background: "#FEE2E2", color: "#DC2626", display: "inline-flex", alignItems: "center" }}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── MODAL: REVIEW STAFF SUBMISSION ──────────────────────────────── */}
+        {reviewingSubmission && (
+          <div style={overlayStyle}>
+            <div style={{ ...modalStyle, maxWidth: 760, maxHeight: "90vh", overflowY: "auto" }}>
+              {/* Modal Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, borderBottom: "1px solid #E2E8F0", paddingBottom: 16 }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#0F172A" }}>
+                      Review Staff Form Submission
+                    </h3>
+                    <span style={{
+                      padding: "3px 10px",
+                      borderRadius: 999,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: "capitalize",
+                      background: reviewingSubmission.status === "approved" ? "#DCFCE7" : reviewingSubmission.status === "rejected" ? "#FEE2E2" : "#FEF3C7",
+                      color: reviewingSubmission.status === "approved" ? "#15803D" : reviewingSubmission.status === "rejected" ? "#B91C1C" : "#B45309",
+                    }}>
+                      {reviewingSubmission.status}
+                    </span>
+                  </div>
+                  <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748B" }}>
+                    Submitted on {new Date(reviewingSubmission.createdAt).toLocaleString()}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setReviewingSubmission(null)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#94A3B8" }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 24, marginBottom: 24 }}>
+                {/* Left: Passport photo */}
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 12, color: "#475569", textTransform: "uppercase", marginBottom: 8 }}>
+                    Passport Photograph
+                  </div>
+                  <div style={{
+                    width: "100%",
+                    height: 220,
+                    borderRadius: 12,
+                    border: "2px solid #E2E8F0",
+                    background: "#F8FAFC",
+                    overflow: "hidden",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    position: "relative",
+                  }}>
+                    {reviewingSubmission.photoUrl ? (
+                      <img
+                        src={reviewingSubmission.photoUrl}
+                        alt={reviewingSubmission.name}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <div style={{ textAlign: "center", color: "#94A3B8" }}>
+                        <User size={40} style={{ margin: "0 auto 6px" }} />
+                        <div style={{ fontSize: 12 }}>No photo provided</div>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 11.5, color: "#64748B", background: "#F1F5F9", padding: "8px 10px", borderRadius: 8 }}>
+                    ✓ Check: Plain white background<br />
+                    ✓ Check: Head & shoulders positioned properly
+                  </div>
+                </div>
+
+                {/* Right: Personal & Payroll Details */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: 14 }}>
+                    <div style={{ fontWeight: 800, fontSize: 13, color: "#0F172A", marginBottom: 8, borderBottom: "1px solid #E2E8F0", paddingBottom: 4 }}>
+                      Personal Information
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12.5 }}>
+                      <div><span style={{ color: "#64748B" }}>Full Name:</span> <strong style={{ color: "#0F172A" }}>{reviewingSubmission.name}</strong></div>
+                      <div><span style={{ color: "#64748B" }}>Phone:</span> <strong style={{ color: "#0F172A" }}>{reviewingSubmission.phone}</strong></div>
+                      <div><span style={{ color: "#64748B" }}>Email:</span> <span style={{ color: "#0F172A" }}>{reviewingSubmission.email || "—"}</span></div>
+                      <div><span style={{ color: "#64748B" }}>Employee ID:</span> <span style={{ color: "#0F172A", fontFamily: "monospace" }}>{reviewingSubmission.employeeId || "Auto-assign on approval"}</span></div>
+                      <div><span style={{ color: "#64748B" }}>Department:</span> <strong style={{ color: "#0F172A" }}>{reviewingSubmission.department || "General"}</strong></div>
+                      <div><span style={{ color: "#64748B" }}>Position:</span> <strong style={{ color: "#0F172A" }}>{reviewingSubmission.position || "Staff"}</strong></div>
+                    </div>
+                  </div>
+
+                  <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: 14 }}>
+                    <div style={{ fontWeight: 800, fontSize: 13, color: "#0F172A", marginBottom: 8, borderBottom: "1px solid #E2E8F0", paddingBottom: 4 }}>
+                      Bank Account & Payroll Details
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12.5 }}>
+                      <div><span style={{ color: "#64748B" }}>Bank Name:</span> <strong style={{ color: "#0F172A" }}>{reviewingSubmission.bankName || "—"}</strong></div>
+                      <div><span style={{ color: "#64748B" }}>Account No:</span> <strong style={{ color: "#0F172A", fontFamily: "monospace" }}>{reviewingSubmission.accountNumber || "—"}</strong></div>
+                      <div style={{ gridColumn: "1 / -1" }}><span style={{ color: "#64748B" }}>Account Name:</span> <strong style={{ color: "#0F172A" }}>{reviewingSubmission.accountName || "—"}</strong></div>
+                      <div style={{ gridColumn: "1 / -1", paddingTop: 4 }}>
+                        <span style={{ color: "#64748B" }}>Stated Monthly Salary:</span>{" "}
+                        <strong style={{ color: "#059669", fontSize: 15 }}>
+                          ₦{Number(reviewingSubmission.salary || 0).toLocaleString()}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Supporting Documents Section */}
+              <div style={{ marginBottom: 24, borderTop: "1px solid #E2E8F0", paddingTop: 16 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, color: "#0F172A", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                  <FileText size={16} color="#FF7F50" />
+                  Uploaded Staff Documents ({reviewingSubmission.documents?.length || 0})
+                </div>
+
+                {reviewingSubmission.documents && reviewingSubmission.documents.length > 0 ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    {reviewingSubmission.documents.map((doc, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          background: "#F8FAFC",
+                          border: "1px solid #E2E8F0",
+                          borderRadius: 8,
+                          padding: "10px 14px",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 10,
+                        }}
+                      >
+                        <div style={{ overflow: "hidden" }}>
+                          <div style={{ fontWeight: 700, fontSize: 12.5, color: "#0F172A", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {doc.title}
+                          </div>
+                          <div style={{ fontSize: 10.5, color: "#94A3B8" }}>
+                            {doc.fileType || "Document"}
+                          </div>
+                        </div>
+
+                        <a
+                          href={doc.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            ...smallBtn,
+                            background: "#2563EB",
+                            color: "#FFFFFF",
+                            textDecoration: "none",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                        >
+                          <ExternalLink size={12} /> View File
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ color: "#94A3B8", fontSize: 13, background: "#F8FAFC", padding: 14, borderRadius: 8, textAlign: "center" }}>
+                    No supporting documents attached to this submission.
+                  </div>
+                )}
+              </div>
+
+              {/* Rejection input area if toggled */}
+              {showRejectInput && (
+                <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: 14, marginBottom: 18 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#991B1B", marginBottom: 6 }}>
+                    Reason for Rejection (Visible to audit):
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="e.g. Passport does not have white background, Bank details mismatch..."
+                    style={{ ...inp, width: "100%", borderColor: "#FCA5A5" }}
+                  />
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
+                    <button
+                      onClick={() => setShowRejectInput(false)}
+                      style={{ ...smallBtn, background: "#E2E8F0", color: "#334155" }}
+                    >
+                      Cancel
+                    </button>
+                    <LoaderButton
+                      loading={reviewActionLoading}
+                      onClick={() => handleRejectSubmission(reviewingSubmission._id)}
+                      style={{ ...smallBtn, background: "#DC2626", color: "#fff" }}
+                    >
+                      Confirm Rejection
+                    </LoaderButton>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Actions */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #E2E8F0", paddingTop: 16 }}>
+                <div>
+                  {!showRejectInput && reviewingSubmission.status !== "rejected" && (
+                    <button
+                      onClick={() => setShowRejectInput(true)}
+                      style={{ ...btn, background: "#FEE2E2", color: "#DC2626", fontSize: 13, padding: "8px 16px" }}
+                    >
+                      Reject Submission
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    onClick={() => setReviewingSubmission(null)}
+                    style={{ ...btn, background: "#F1F5F9", color: "#475569", fontSize: 13, padding: "8px 16px" }}
+                  >
+                    Close
+                  </button>
+
+                  <LoaderButton
+                    loading={reviewActionLoading}
+                    onClick={() => handleApproveSubmission(reviewingSubmission._id)}
+                    style={{ ...btn, background: "#15803D", color: "#FFFFFF", fontSize: 13, padding: "8px 20px", display: "inline-flex", alignItems: "center", gap: 6 }}
+                  >
+                    <CheckCircle2 size={15} />
+                    {reviewingSubmission.status === "approved" ? "Re-Approve & Sync Profile" : "Approve & Add to Staff"}
+                  </LoaderButton>
+                </div>
+              </div>
             </div>
           </div>
         )}

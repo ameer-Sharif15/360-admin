@@ -37,7 +37,17 @@ export async function uploadToCloudinary(file: File, folder?: string): Promise<s
     formData.append("upload_preset", uploadPreset);
     if (folder) formData.append("folder", folder);
 
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    const isDoc =
+      Boolean(file.type?.includes("pdf")) ||
+      Boolean(file.type?.includes("document")) ||
+      Boolean(file.type?.includes("word")) ||
+      Boolean(file.name?.match(/\.(pdf|doc|docx|csv|txt)$/i));
+
+    const endpoint = isDoc
+      ? `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`
+      : `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+
+    const res = await fetch(endpoint, {
       method: "POST",
       body: formData,
     });
