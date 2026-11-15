@@ -1185,14 +1185,14 @@ export default function StaffsPage() {
           </div>
           <div className="staff-btn-row">
             <a
-              href="/staff-form"
+              href="https://360live-three.vercel.app/staff-form"
               target="_blank"
               rel="noopener noreferrer"
               style={{
                 ...btn,
                 background: "#0F172A",
-                color: "#FBBF24",
-                border: "1px solid #D97706",
+                color: "#FF7F50",
+                border: "1px solid #FF7F50",
                 fontSize: 13,
                 padding: "9px 14px",
                 display: "inline-flex",
@@ -1205,9 +1205,9 @@ export default function StaffsPage() {
             </a>
             <button
               onClick={() => {
-                const url = typeof window !== 'undefined' ? `${window.location.origin}/staff-form` : 'https://360-admin-one.vercel.app/staff-form';
+                const url = "https://360live-three.vercel.app/staff-form";
                 navigator.clipboard.writeText(url);
-                setSuccessMsg("Public Staff Form link copied to clipboard! You can share it directly with staff.");
+                setSuccessMsg("Official Staff Form link copied to clipboard! (https://360live-three.vercel.app/staff-form)");
               }}
               style={{
                 ...btn,
@@ -2099,31 +2099,30 @@ export default function StaffsPage() {
               marginBottom: 20,
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
-                <span style={{ background: "#F59E0B", color: "#fff", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
-                  PUBLIC LINK
+                <span style={{ background: "#FF7F50", color: "#fff", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
+                  PUBLIC WEB LINK
                 </span>
-                <span style={{ color: "#92400E", fontWeight: 600 }}>Share this dedicated link with staff to fill out:</span>
-                <code style={{ background: "#FEF3C7", padding: "3px 8px", borderRadius: 6, color: "#B45309", fontSize: 12 }}>
-                  {typeof window !== "undefined" ? `${window.location.origin}/staff-form` : "https://360-admin-one.vercel.app/staff-form"}
+                <span style={{ color: "#9A3412", fontWeight: 600 }}>Official staff portal link (hosted on main website):</span>
+                <code style={{ background: "#FFEDD5", padding: "3px 8px", borderRadius: 6, color: "#C2410C", fontSize: 12, fontWeight: 700 }}>
+                  https://360live-three.vercel.app/staff-form
                 </code>
               </div>
 
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   onClick={() => {
-                    const url = typeof window !== "undefined" ? `${window.location.origin}/staff-form` : "https://360-admin-one.vercel.app/staff-form";
-                    navigator.clipboard.writeText(url);
-                    setSuccessMsg("Public link copied to clipboard!");
+                    navigator.clipboard.writeText("https://360live-three.vercel.app/staff-form");
+                    setSuccessMsg("Public link copied to clipboard! (https://360live-three.vercel.app/staff-form)");
                   }}
-                  style={{ ...smallBtn, background: "#D97706", color: "#fff", display: "inline-flex", alignItems: "center", gap: 4 }}
+                  style={{ ...smallBtn, background: "#EA580C", color: "#fff", display: "inline-flex", alignItems: "center", gap: 4 }}
                 >
                   <FileText size={12} /> Copy Link
                 </button>
                 <a
-                  href="/staff-form"
+                  href="https://360live-three.vercel.app/staff-form"
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ ...smallBtn, background: "#78350F", color: "#fff", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
+                  style={{ ...smallBtn, background: "#9A3412", color: "#fff", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
                 >
                   <ExternalLink size={12} /> Open Form
                 </a>
