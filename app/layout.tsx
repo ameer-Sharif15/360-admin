@@ -596,7 +596,8 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-        <title>360 Live Admin Panel</title>
+        <title>360 Degree Global Portal</title>
+        <meta property="og:site_name" content="360 Degree Global" />
       </head>
       <body>
         <AuthProvider>
