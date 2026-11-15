@@ -598,6 +598,8 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <title>360 Degree Global Portal</title>
         <meta property="og:site_name" content="360 Degree Global" />
+        <link rel="icon" type="image/png" href="/no-bg.png" />
+        <link rel="apple-touch-icon" href="/no-bg.png" />
       </head>
       <body>
         <AuthProvider>

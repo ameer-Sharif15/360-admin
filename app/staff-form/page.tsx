@@ -14,7 +14,6 @@ import {
   Trash2,
   Plus,
   ShieldCheck,
-  Calendar,
   Lock,
   ArrowRight,
   Info,
@@ -260,7 +259,7 @@ export default function StaffFormPage() {
         .sf-header { border-bottom: 1px solid #e2e8f0; background: #ffffff; position: sticky; top: 0; z-index: 50; box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
         .sf-header-inner { max-width: 800px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
         .sf-brand { display: flex; align-items: center; gap: 12px; }
-        .sf-logo-img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1.5px solid #fecaca; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.15); }
+        .sf-logo-img { width: 42px; height: 42px; border-radius: 12px; object-fit: contain; background: #ffffff; padding: 2px; border: 1.5px solid #fecaca; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.12); }
         .sf-brand-title { font-size: 15px; font-weight: 800; color: #0f172a; letter-spacing: -0.01em; }
         .sf-brand-sub { font-size: 11px; color: #ef4444; font-weight: 700; letter-spacing: 0.02em; }
         .sf-badge-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: #ef4444; background: #fef2f2; padding: 6px 14px; border-radius: 999px; border: 1px solid #fecaca; font-weight: 700; }
@@ -339,7 +338,7 @@ export default function StaffFormPage() {
           <div className="sf-header-inner">
             <div className="sf-brand">
               <img
-                src="/favicon.png"
+                src="/no-bg.png"
                 alt="360 Live Logo"
                 className="sf-logo-img"
               />
@@ -372,7 +371,7 @@ export default function StaffFormPage() {
 
               <p style={{ color: "#475569", fontSize: 14.5, lineHeight: 1.6, maxWidth: 520, margin: "0 auto 24px" }}>
                 Your staff profile update, passport photograph, bank account details, and soft-copy documents have been
-                securely received by the <strong>IT Department & Office of the General Manager</strong>.
+                securely received by the <strong>IT Department</strong>.
               </p>
 
               <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 14, padding: "16px 20px", maxWidth: 460, margin: "0 auto 24px", textAlign: "left", fontSize: 13 }}>
@@ -437,12 +436,8 @@ export default function StaffFormPage() {
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 16, paddingTop: 14, borderTop: "1px solid #f1f5f9", fontSize: 12.5, color: "#64748b" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Calendar size={15} color="#ef4444" />
-                  <span>Submission Deadline: <strong style={{ color: "#0f172a" }}>Monday, 26th October 2026</strong></span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <Building2 size={15} color="#ef4444" />
-                  <span>Office of the General Manager & IT Department</span>
+                  <span style={{ fontWeight: 600, color: "#0f172a" }}>IT Department · Digital Staff Records</span>
                 </div>
               </div>
             </div>
