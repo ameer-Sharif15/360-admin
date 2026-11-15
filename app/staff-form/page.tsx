@@ -84,6 +84,7 @@ export default function StaffFormPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [department, setDepartment] = useState("");
+  const [customDepartment, setCustomDepartment] = useState("");
   const [position, setPosition] = useState("");
   const [employeeId, setEmployeeId] = useState("");
 
@@ -157,6 +158,10 @@ export default function StaffFormPage() {
       setErrorMsg("Phone number is required.");
       return;
     }
+    if (department === "Other" && !customDepartment.trim()) {
+      setErrorMsg("Please type your department name.");
+      return;
+    }
     if (!passportFile && !passportPreview) {
       setErrorMsg("Please upload your recent passport photograph with a plain white background.");
       return;
@@ -183,6 +188,8 @@ export default function StaffFormPage() {
 
     const finalBankName =
       selectedBank === "Other / Microfinance Bank" ? customBankName.trim() : selectedBank;
+    const finalDepartment =
+      department === "Other" ? customDepartment.trim() || "General Operations" : department || "General Operations";
 
     try {
       setLoading(true);
@@ -212,7 +219,7 @@ export default function StaffFormPage() {
         name: name.trim(),
         phone: phone.trim(),
         email: email.trim(),
-        department: department || "General Operations",
+        department: finalDepartment,
         position: position.trim() || "Staff",
         employeeId: employeeId.trim(),
         photoUrl: uploadedPhotoUrl,
@@ -247,6 +254,8 @@ export default function StaffFormPage() {
 
   const finalBankDisplayName =
     selectedBank === "Other / Microfinance Bank" ? customBankName || "Other MFB" : selectedBank;
+  const finalDepartmentDisplayName =
+    department === "Other" ? customDepartment || "Other" : department;
 
   return (
     <>
@@ -385,7 +394,7 @@ export default function StaffFormPage() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b" }}>
                   <span>Department:</span>
-                  <span style={{ color: "#0f172a", fontWeight: 600 }}>{department || "General Operations"}</span>
+                  <span style={{ color: "#0f172a", fontWeight: 600 }}>{finalDepartmentDisplayName || "General Operations"}</span>
                 </div>
               </div>
 
@@ -401,6 +410,7 @@ export default function StaffFormPage() {
                   setPhone("");
                   setEmail("");
                   setDepartment("");
+                  setCustomDepartment("");
                   setPosition("");
                   setEmployeeId("");
                   setSelectedBank("");
@@ -498,14 +508,33 @@ export default function StaffFormPage() {
                     <select
                       required
                       value={department}
-                      onChange={(e) => setDepartment(e.target.value)}
+                      onChange={(e) => {
+                        setDepartment(e.target.value);
+                        if (e.target.value !== "Other") {
+                          setCustomDepartment("");
+                        }
+                      }}
                       className="sf-select"
                     >
                       <option value="">Select your department...</option>
                       {DEPARTMENTS.map((d) => (
                         <option key={d} value={d}>{d}</option>
                       ))}
+                      <option value="Other">Other / Type department if not listed...</option>
                     </select>
+
+                    {department === "Other" && (
+                      <input
+                        type="text"
+                        required
+                        placeholder="Type your department name..."
+                        value={customDepartment}
+                        onChange={(e) => setCustomDepartment(e.target.value)}
+                        className="sf-input"
+                        style={{ marginTop: 10 }}
+                        autoFocus
+                      />
+                    )}
                   </div>
 
                   <div>
@@ -803,7 +832,7 @@ export default function StaffFormPage() {
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 900, color: "#0f172a" }}>{name}</div>
                   <div style={{ fontSize: 13, color: "#ef4444", fontWeight: 800 }}>
-                    {position} · {department || "General"}
+                    {position} · {finalDepartmentDisplayName || "General Operations"}
                   </div>
                   <div style={{ fontSize: 11.5, color: "#16a34a", fontWeight: 600, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
                     <CheckCircle2 size={13} /> Plain white background confirmed
@@ -815,6 +844,14 @@ export default function StaffFormPage() {
               <div style={{ background: "#f8fafc", borderRadius: 14, padding: "12px 18px", border: "1px solid #e2e8f0", marginBottom: 16 }}>
                 <div style={{ fontSize: 11.5, fontWeight: 800, color: "#dc2626", textTransform: "uppercase", marginBottom: 8, letterSpacing: "0.04em" }}>
                   Personal Information
+                </div>
+                <div className="sf-review-row">
+                  <span className="sf-review-label">Department:</span>
+                  <span className="sf-review-value" style={{ fontWeight: 700, color: "#0f172a" }}>{finalDepartmentDisplayName || "General Operations"}</span>
+                </div>
+                <div className="sf-review-row">
+                  <span className="sf-review-label">Position:</span>
+                  <span className="sf-review-value">{position}</span>
                 </div>
                 <div className="sf-review-row">
                   <span className="sf-review-label">Phone:</span>
