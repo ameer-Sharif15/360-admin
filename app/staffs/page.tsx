@@ -2758,67 +2758,50 @@ export default function StaffsPage() {
                           }}
                           style={frontCardStyle}
                         >
-                          {/* Top Right Decorative Wave Curves */}
-                          <svg
-                            viewBox="0 0 100 45"
-                            style={{ position: "absolute", top: 0, right: 0, width: 100, height: 45, pointerEvents: "none", zIndex: 1 }}
-                            preserveAspectRatio="none"
-                          >
-                            <path d="M 0 0 C 35 30, 65 38, 100 24 L 100 0 Z" fill="#DC2626" />
-                            <path d="M 20 0 C 50 26, 75 32, 100 18 L 100 0 Z" fill="#3D120E" />
-                          </svg>
-
                           {/* Top Header */}
                           <div style={{
-                            padding: "6px 8px 4px",
-                            display: "flex", alignItems: "center", gap: 6,
-                            position: "relative", zIndex: 2,
+                            padding: "7px 10px 5px",
+                            display: "flex", alignItems: "center", gap: 7,
+                            background: "#FFFFFF",
+                            flexShrink: 0,
                           }}>
                             {/* Round Logo */}
-                            <div style={{ width: 38, height: 38, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <div style={{ width: 40, height: 40, flexShrink: 0 }}>
                               <img src="/logo.png" alt="360 Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }}
                                 onError={(e: any) => { e.currentTarget.style.display = "none"; }} />
                             </div>
-
-                            {/* Dark Divider */}
-                            <div style={{ width: 1.5, height: 32, background: "#3D120E", flexShrink: 0 }} />
-
-                            {/* Brand Titles */}
+                            {/* Maroon Vertical Divider */}
+                            <div style={{ width: 1.5, height: 34, background: "#3D120E", flexShrink: 0 }} />
+                            {/* Brand Text */}
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 9.5, fontWeight: 900, color: "#2E0D0A", letterSpacing: 0.2, lineHeight: 1.15 }}>
-                                360 DEGREE
-                              </div>
-                              <div style={{ fontSize: 8.5, fontWeight: 900, color: "#2E0D0A", letterSpacing: 0.15, lineHeight: 1.15 }}>
-                                GLOBAL ESTATE LTD.
-                              </div>
-                              <div style={{ fontSize: 6.5, fontWeight: 700, color: "#3D120E", letterSpacing: 0.2, marginTop: 1 }}>
-                                RC: 1845920
-                              </div>
+                              <div style={{ fontSize: 10.5, fontWeight: 900, color: "#2E0D0A", letterSpacing: 0.3, lineHeight: 1.1 }}>360 DEGREE</div>
+                              <div style={{ fontSize: 9.5, fontWeight: 900, color: "#2E0D0A", letterSpacing: 0.2, lineHeight: 1.1 }}>GLOBAL ESTATE LTD.</div>
+                              <div style={{ fontSize: 7, fontWeight: 700, color: "#3D120E", letterSpacing: 0.2, marginTop: 2 }}>RC: 1845920</div>
                             </div>
                           </div>
 
                           {/* Red Banner: STAFF IDENTITY CARD */}
                           <div style={{
                             background: "#DC2626",
-                            padding: "3px 6px", textAlign: "center",
-                            width: "100%", zIndex: 2,
+                            padding: "4px 6px",
+                            textAlign: "center",
+                            flexShrink: 0,
                           }}>
-                            <div style={{ fontSize: 8, fontWeight: 900, color: "#FFFFFF", letterSpacing: 1.2 }}>
+                            <div style={{ fontSize: 8.5, fontWeight: 900, color: "#FFFFFF", letterSpacing: 2 }}>
                               STAFF IDENTITY CARD
                             </div>
                           </div>
 
-                          {/* Centered Passport Photo Frame with Red Border */}
+                          {/* Passport Photo — centered, red border */}
                           <div style={{
-                            width: 86, height: 104, borderRadius: 6,
-                            overflow: "hidden",
+                            width: 88, height: 108,
                             border: "2px solid #DC2626",
-                            background: "#F8FAFC",
+                            borderRadius: 5,
+                            overflow: "hidden",
+                            background: "#F0F0F0",
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            position: "relative",
-                            margin: "4px auto 2px",
-                            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-                            zIndex: 2,
+                            margin: "6px auto 3px",
+                            flexShrink: 0,
                           }}>
                             {member.photoUrl ? (
                               <img
@@ -2829,97 +2812,100 @@ export default function StaffsPage() {
                                   transformOrigin: "center center",
                                 }}
                               />
-                            ) : <User size={36} color="#CBD5E1" />}
+                            ) : <User size={38} color="#CBD5E1" />}
                           </div>
 
-                          {/* Staff Name & Position Pill Badge */}
-                          <div style={{ textAlign: "center", width: "100%", zIndex: 2 }}>
-                            <div style={{ fontSize: 12, fontWeight: 900, color: "#1A0A08", letterSpacing: 0.3, lineHeight: 1.2, textTransform: "uppercase" }}>
-                              {member.name}
-                            </div>
-                            <div style={{
+                          {/* Staff Name */}
+                          <div style={{ textAlign: "center", fontSize: 12.5, fontWeight: 900, color: "#1A0A08", letterSpacing: 0.5, textTransform: "uppercase", lineHeight: 1.2, margin: "0 6px 2px", flexShrink: 0 }}>
+                            {member.name}
+                          </div>
+
+                          {/* Position Pill */}
+                          <div style={{ textAlign: "center", flexShrink: 0, marginBottom: 4 }}>
+                            <span style={{
                               display: "inline-block",
                               background: "#3D120E",
                               color: "#FFFFFF",
-                              fontSize: 7, fontWeight: 800,
-                              padding: "2px 14px", borderRadius: 999,
-                              marginTop: 2, letterSpacing: 0.5,
-                              textTransform: "uppercase",
+                              fontSize: 7.5, fontWeight: 800,
+                              padding: "2px 16px", borderRadius: 999,
+                              letterSpacing: 0.5, textTransform: "uppercase",
                             }}>
                               {(member.position || "OFFICIAL STAFF").toUpperCase()}
-                            </div>
+                            </span>
                           </div>
 
-                          {/* Structured 2-Column Info Grid */}
+                          {/* 2-Column Info Grid Box */}
                           <div style={{
-                            width: "calc(100% - 16px)",
-                            margin: "4px 8px 2px",
-                            background: "#FFFFFF",
+                            margin: "0 8px 4px",
                             border: "1.5px solid #3D120E",
-                            borderRadius: 8,
-                            padding: "4px 8px",
+                            borderRadius: 7,
+                            background: "#FFFFFF",
                             display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            zIndex: 2,
+                            alignItems: "stretch",
+                            flexShrink: 0,
+                            overflow: "hidden",
                           }}>
-                            {/* Left Column: STAFF ID & PHONE */}
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 5, fontWeight: 900, color: "#3D120E", letterSpacing: 0.3 }}>STAFF ID</div>
-                              <div style={{ fontSize: 7.5, fontWeight: 900, color: "#0F172A", fontFamily: "monospace", letterSpacing: 0.2 }}>{empId}</div>
-                              <div style={{ fontSize: 5, fontWeight: 900, color: "#3D120E", letterSpacing: 0.3, marginTop: 2 }}>PHONE</div>
+                            {/* Left column */}
+                            <div style={{ flex: 1, padding: "5px 7px" }}>
+                              <div style={{ fontSize: 5, fontWeight: 900, color: "#3D120E", letterSpacing: 0.5, textTransform: "uppercase" }}>STAFF ID</div>
+                              <div style={{ fontSize: 7.5, fontWeight: 900, color: "#0F172A", fontFamily: "monospace", letterSpacing: 0.3, marginBottom: 3 }}>{empId}</div>
+                              <div style={{ fontSize: 5, fontWeight: 900, color: "#3D120E", letterSpacing: 0.5, textTransform: "uppercase" }}>PHONE</div>
                               <div style={{ fontSize: 6.5, fontWeight: 800, color: "#0F172A" }}>{member.phone || "—"}</div>
                             </div>
-
-                            {/* Red Divider */}
-                            <div style={{ width: 1, background: "#DC2626", height: 32, margin: "0 6px" }} />
-
-                            {/* Right Column: DEPARTMENT & STATUS */}
-                            <div style={{ flex: 1.1 }}>
-                              <div style={{ fontSize: 5, fontWeight: 900, color: "#3D120E", letterSpacing: 0.3 }}>DEPARTMENT</div>
-                              <div style={{ fontSize: 6.5, fontWeight: 800, color: "#0F172A", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {/* Red centre divider */}
+                            <div style={{ width: 1, background: "#DC2626", alignSelf: "stretch" }} />
+                            {/* Right column */}
+                            <div style={{ flex: 1.1, padding: "5px 7px" }}>
+                              <div style={{ fontSize: 5, fontWeight: 900, color: "#3D120E", letterSpacing: 0.5, textTransform: "uppercase" }}>DEPARTMENT</div>
+                              <div style={{ fontSize: 6.5, fontWeight: 800, color: "#0F172A", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 3 }}>
                                 {(member.department || "GENERAL").toUpperCase()}
                               </div>
-                              <div style={{ fontSize: 5, fontWeight: 900, color: "#3D120E", letterSpacing: 0.3, marginTop: 2 }}>STATUS</div>
+                              <div style={{ fontSize: 5, fontWeight: 900, color: "#3D120E", letterSpacing: 0.5, textTransform: "uppercase" }}>STATUS</div>
                               <div style={{ fontSize: 7.5, fontWeight: 900, color: member.active ? "#16A34A" : "#DC2626", letterSpacing: 0.3 }}>
                                 {member.active ? "ACTIVE" : "INACTIVE"}
                               </div>
                             </div>
                           </div>
 
-                          {/* Bottom Row: Centered Attendance QR (No text, No cardholder signature) */}
+                          {/* Bottom Row: QR (left) + Signature (right) — NO labels */}
                           <div style={{
-                            width: "100%",
                             display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            margin: "1px 0 2px",
-                            zIndex: 2,
+                            alignItems: "flex-end",
+                            justifyContent: "space-between",
+                            padding: "0 10px",
+                            marginBottom: 2,
+                            flexShrink: 0,
                           }}>
+                            {/* Attendance QR — NO text below */}
                             <img
                               src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(attendUrl)}`}
                               alt="Attendance QR" crossOrigin="anonymous"
                               style={{
-                                width: 36, height: 36,
-                                borderRadius: 4,
+                                width: 34, height: 34,
                                 border: "1px solid #CBD5E1",
-                                padding: 1.5,
+                                borderRadius: 3,
                                 background: "#FFFFFF",
-                                boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
                               }}
                             />
+                            {/* Director signature — NO "CARDHOLDER SIGNATURE" label */}
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                              <img
+                                src={directorSigUrl || "/signatures/official_signature_dark.png"} alt="Signature" crossOrigin="anonymous"
+                                style={{
+                                  maxHeight: (28 * cardLayout.signatureScale) / 100,
+                                  maxWidth: 80,
+                                  objectFit: "contain",
+                                  display: "block",
+                                }}
+                              />
+                              <div style={{ width: 80, borderBottom: "1.5px solid #3D120E", marginTop: 1 }} />
+                            </div>
                           </div>
 
-                          {/* Bottom Curved Wave Accent (Red & Maroon) */}
-                          <div style={{ position: "relative", width: "100%", height: 18, marginTop: "auto" }}>
-                            <svg
-                              viewBox="0 0 240 24"
-                              style={{ width: "100%", height: 24, position: "absolute", bottom: 0, left: 0, pointerEvents: "none" }}
-                              preserveAspectRatio="none"
-                            >
-                              <path d="M 0 10 C 60 18, 140 4, 240 12 L 240 24 L 0 24 Z" fill="#DC2626" />
-                              <path d="M 0 14 C 60 21, 140 8, 240 15 L 240 24 L 0 24 Z" fill="#3D120E" />
-                            </svg>
+                          {/* Bottom Red + Maroon stripe */}
+                          <div style={{ marginTop: "auto", flexShrink: 0 }}>
+                            <div style={{ height: 7, background: "#DC2626", width: "100%" }} />
+                            <div style={{ height: 5, background: "#3D120E", width: "100%" }} />
                           </div>
                         </div>
 
@@ -2931,96 +2917,97 @@ export default function StaffsPage() {
                           }}
                           style={backCardStyle}
                         >
-                          {/* Top Dark Maroon Header Banner with Wave & Red Strip */}
-                          <div style={{ position: "relative", width: "100%", zIndex: 2 }}>
-                            <svg viewBox="0 0 240 42" style={{ width: "100%", height: 42, display: "block" }} preserveAspectRatio="none">
-                              <path d="M 0 0 L 240 0 L 240 31 C 180 37, 70 29, 0 35 Z" fill="#3D120E" />
-                              <path d="M 0 35 C 70 29, 180 37, 240 31 L 240 35 C 180 41, 70 33, 0 39 Z" fill="#DC2626" />
-                            </svg>
-                            <div style={{
-                              position: "absolute", top: 0, left: 0, right: 0,
-                              padding: "5px 6px 0", textAlign: "center",
-                            }}>
-                              <div style={{ fontSize: 7.5, fontWeight: 900, color: "#FFFFFF", letterSpacing: 0.5 }}>
-                                OFFICIAL IDENTIFICATION CARD
-                              </div>
-                              <div style={{ fontSize: 6, fontWeight: 800, color: "#FFFFFF", letterSpacing: 0.3, marginTop: 1 }}>
-                                PROPERTY OF 360 DEGREE GLOBAL ESTATE LTD.
-                              </div>
+                          {/* Top Dark Maroon Header — solid flat, matching reference */}
+                          <div style={{
+                            background: "#3D120E",
+                            padding: "7px 8px 5px",
+                            textAlign: "center",
+                            flexShrink: 0,
+                            borderBottom: "4px solid #DC2626",
+                          }}>
+                            <div style={{ fontSize: 7.5, fontWeight: 900, color: "#FFFFFF", letterSpacing: 0.6 }}>
+                              OFFICIAL IDENTIFICATION CARD
+                            </div>
+                            <div style={{ fontSize: 5.5, fontWeight: 700, color: "#F5D0D0", letterSpacing: 0.3, marginTop: 2 }}>
+                              PROPERTY OF 360 DEGREE GLOBAL ESTATE LTD.
                             </div>
                           </div>
 
-                          {/* Terms of Authorization */}
+                          {/* Terms of Authorization — cream/beige box, red border */}
                           <div style={{
-                            width: "calc(100% - 16px)",
-                            margin: "4px 8px 3px",
-                            fontSize: 5.5, color: "#1E293B", textAlign: "center", lineHeight: 1.35,
-                            background: "#FFFFFF", border: "1px solid #3D120E", borderRadius: 8, padding: "5px 6px",
-                            zIndex: 2,
+                            margin: "6px 8px 4px",
+                            fontSize: 5.5, color: "#1E293B", textAlign: "center", lineHeight: 1.4,
+                            background: "#FEF3CD", border: "1px solid #DC2626", borderRadius: 6, padding: "5px 7px",
                           }}>
                             This card certifies that the bearer is an authorized staff member of <strong>360 Degree Global Estate Ltd.</strong> and is entitled to all official privileges accorded to same. Must be surrendered upon termination of employment or request.
                           </div>
 
-                          {/* Centered High-Contrast Verification QR (Red border, NO text) */}
+                          {/* Verification QR — large, red border, NO "SCAN TO VERIFY" text */}
                           <div style={{
                             display: "flex", justifyContent: "center", alignItems: "center",
-                            margin: "4px 0 2px",
-                            zIndex: 2,
+                            margin: "4px 0 3px",
                           }}>
                             <div style={{
-                              padding: 2.5,
+                              padding: 3,
                               border: "2.5px solid #DC2626",
-                              borderRadius: 8,
+                              borderRadius: 6,
                               background: "#FFFFFF",
-                              boxShadow: "0 2px 8px rgba(220, 38, 38, 0.12)",
+                              boxShadow: "0 2px 8px rgba(220,38,38,0.12)",
                               display: "inline-flex",
                             }}>
                               <img
                                 src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(verifyUrl)}`}
                                 alt="Verification QR" crossOrigin="anonymous"
-                                style={{ width: 64, height: 64, display: "block" }}
+                                style={{ width: 68, height: 68, display: "block" }}
                               />
                             </div>
                           </div>
 
-                          {/* Director Signature (ONLY "Director" below line) */}
-                          <div style={{ width: "100%", textAlign: "center", margin: "2px 0 3px", zIndex: 2 }}>
+                          {/* Director Signature — ONLY "Director" below line, NO name, NO CEO */}
+                          <div style={{ textAlign: "center", margin: "3px 0 2px" }}>
                             <div style={{
                               width: 120, margin: "0 auto",
-                              minHeight: 22, display: "flex", alignItems: "flex-end", justifyContent: "center",
+                              minHeight: 24, display: "flex", alignItems: "flex-end", justifyContent: "center",
                             }}>
                               <img
                                 src={directorSigUrl || "/signatures/official_signature_dark.png"} alt="Director Signature" crossOrigin="anonymous"
                                 style={{
-                                  maxHeight: (22 * cardLayout.signatureScale) / 100,
+                                  maxHeight: (26 * cardLayout.signatureScale) / 100,
+                                  maxWidth: 110,
                                   objectFit: "contain", display: "block", margin: "0 auto",
                                 }}
                               />
                             </div>
-                            <div style={{ width: 130, borderBottom: "1.5px solid #3D120E", margin: "1px auto 2px" }} />
-                            <div style={{ fontSize: 7, fontWeight: 800, color: "#1A0A08", letterSpacing: 0.4 }}>
+                            <div style={{ width: 130, borderBottom: "1.5px solid #1A0A08", margin: "1px auto 2px" }} />
+                            <div style={{ fontSize: 7.5, fontWeight: 800, color: "#1A0A08", letterSpacing: 0.5 }}>
                               Director
                             </div>
                           </div>
 
-                          {/* Return Notice & Police Station */}
-                          <div style={{ width: "85%", height: 1, background: "#DC2626", margin: "3px auto", zIndex: 2 }} />
-                          <div style={{ fontSize: 5, color: "#1E293B", textAlign: "center", lineHeight: 1.35, padding: "0 8px", zIndex: 2 }}>
+                          {/* Return Notice */}
+                          <div style={{ width: "88%", height: 1, background: "#DC2626", margin: "2px auto 3px" }} />
+                          <div style={{ fontSize: 5, color: "#1E293B", textAlign: "center", lineHeight: 1.4, padding: "0 8px" }}>
                             <div>If found, please return to <strong>360 Degree Global Estate Ltd.</strong>,</div>
                             <div>NSUK 2nd Gate, Keffi, Nasarawa State, or the nearest Police Station.</div>
                             <div style={{ fontWeight: 700, marginTop: 1 }}>Tel: 08038923692</div>
                           </div>
 
-                          {/* Barcode Stripe with Staff ID */}
-                          <div style={{ width: "100%", margin: "4px auto 6px", zIndex: 2 }}>
+                          {/* Barcode Stripe + Staff ID text */}
+                          <div style={{ width: "100%", margin: "5px auto 0", marginTop: "auto" }}>
                             <div style={{
-                              height: 13,
+                              height: 14,
                               background: "repeating-linear-gradient(90deg, #000 0, #000 1.5px, #fff 1.5px, #fff 3px)",
-                              width: "82%", margin: "0 auto",
+                              width: "84%", margin: "0 auto",
                             }} />
-                            <div style={{ fontSize: 6.5, letterSpacing: 2, color: "#0F172A", textAlign: "center", marginTop: 2, fontFamily: "monospace", fontWeight: 800 }}>
+                            <div style={{ fontSize: 6.5, letterSpacing: 2.5, color: "#0F172A", textAlign: "center", marginTop: 2, fontFamily: "monospace", fontWeight: 800 }}>
                               *{empId}*
                             </div>
+                          </div>
+
+                          {/* Bottom Red + Maroon stripe */}
+                          <div style={{ flexShrink: 0 }}>
+                            <div style={{ height: 7, background: "#DC2626", width: "100%", marginTop: 4 }} />
+                            <div style={{ height: 5, background: "#3D120E", width: "100%" }} />
                           </div>
                         </div>
 
