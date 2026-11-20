@@ -5,7 +5,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from '../lib/auth-context';
 import { API_BASE_URL, apiRequest } from '../lib/api';
-import { io } from 'socket.io-client';
 import './globals.css';
 import {
   LayoutDashboard,
@@ -52,7 +51,9 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const isPublicRoute =
     pathname === '/login' ||
     pathname.startsWith('/staff-form') ||
-    pathname.startsWith('/staff-update');
+    pathname.startsWith('/staff-update') ||
+    pathname.startsWith('/verify/staff') ||
+    pathname.startsWith('/attend/staff');
 
   useEffect(() => {
     if (!loading && !user && !isPublicRoute) {
@@ -110,41 +111,48 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
     };
     window.addEventListener('it_unread_count_updated', handleCustomUnread);
 
-    // Socket.io for live updates
+    // Socket.io for live updates (loaded dynamically on client to avoid SSR ws vendor-chunk errors)
     let socket: any = null;
-    try {
-      socket = io(API_BASE_URL, {
-        auth: { token },
-        extraHeaders: { Authorization: `Bearer ${token}` },
-        transports: ['polling', 'websocket'],
-        reconnectionAttempts: 3,
-        timeout: 5000,
-      });
+    let isUnmounted = false;
+    import('socket.io-client')
+      .then(({ io }) => {
+        if (isUnmounted) return;
+        try {
+          socket = io(API_BASE_URL, {
+            auth: { token },
+            extraHeaders: { Authorization: `Bearer ${token}` },
+            transports: ['polling', 'websocket'],
+            reconnectionAttempts: 3,
+            timeout: 5000,
+          });
 
-      socket.on('connect_error', () => {
-        // silent failover, avoid console noise when socket transport is not ready
-      });
+          socket.on('connect_error', () => {
+            // silent failover, avoid console noise when socket transport is not ready
+          });
 
-      socket.on('connect', () => {
-        socket.emit('join_channel', 'admin_channel');
-        socket.emit('join_channel', 'support_channel');
-        const uid = (user as any)._id || (user as any).id;
-        if (uid) socket.emit('join_user', uid);
-      });
+          socket.on('connect', () => {
+            socket.emit('join_channel', 'admin_channel');
+            socket.emit('join_channel', 'support_channel');
+            const uid = (user as any)._id || (user as any).id;
+            if (uid) socket.emit('join_user', uid);
+          });
 
-      const handleIncoming = () => {
-        fetchUnreadCount();
-      };
+          const handleIncoming = () => {
+            fetchUnreadCount();
+          };
 
-      socket.on('new_message', handleIncoming);
-      socket.on('message_received', handleIncoming);
-      socket.on('chat_updated', handleIncoming);
-      socket.on('it_announcement', handleIncoming);
-    } catch (_) {}
+          socket.on('new_message', handleIncoming);
+          socket.on('message_received', handleIncoming);
+          socket.on('chat_updated', handleIncoming);
+          socket.on('it_announcement', handleIncoming);
+        } catch (_) {}
+      })
+      .catch(() => {});
 
     const interval = setInterval(fetchUnreadCount, 30000);
 
     return () => {
+      isUnmounted = true;
       window.removeEventListener('it_unread_count_updated', handleCustomUnread);
       clearInterval(interval);
       if (socket) socket.disconnect();
