@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://three60-backend-a17m.onrender.com';
+const rawBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://three60-backend-a17m.onrender.com';
+const API_BASE_URL = rawBaseUrl.includes('three60-backend-l6nc.onrender.com')
+  ? 'https://three60-backend-a17m.onrender.com'
+  : rawBaseUrl;
 
 export async function POST(request: NextRequest) {
   try {

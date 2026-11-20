@@ -1,9 +1,15 @@
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+const getApiBaseUrl = () => {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+  // Guard against suspended / deprecated Render service URL
+  if (envUrl && !envUrl.includes('three60-backend-l6nc.onrender.com')) {
+    return envUrl;
+  }
+  return typeof window !== 'undefined' && window.location.hostname === 'localhost'
     ? 'http://localhost:5001'
-    : 'https://three60-backend-a17m.onrender.com');
+    : 'https://three60-backend-a17m.onrender.com';
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 export async function apiRequest<T = any>(
   path: string,
