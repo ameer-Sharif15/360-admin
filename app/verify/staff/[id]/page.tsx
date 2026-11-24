@@ -387,7 +387,7 @@ function StaffQrVerifyAndAttendInner() {
                     360° Global Estate Ltd.
                   </span>
                   <div style={{ fontSize: 11.5, fontWeight: 700, color: "rgba(255,255,255,0.92)", marginTop: 6 }}>
-                    RC: 1845920 · NSUK 2nd Gate, Keffi
+                    RC: 6860528 · NSUK 2nd Gate, Keffi
                   </div>
                 </div>
                 <Award size={30} color="rgba(255,255,255,0.5)" />

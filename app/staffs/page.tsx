@@ -3109,7 +3109,7 @@ export default function StaffsPage() {
                                   GLOBAL ESTATE LTD.
                                 </div>
                                 <div style={{ fontSize: 9.2, fontWeight: 800, color: "#3D120E", letterSpacing: 0.2, marginTop: 2.5, lineHeight: 1 }}>
-                                  RC: 1845920
+                                  RC: 6860528
                                 </div>
                               </div>
                             </div>
